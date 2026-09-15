@@ -168,6 +168,9 @@ a slash is always an event.
 
 ## Development
 
+Setup, how to run the test scripts, and the commit convention are in
+[CONTRIBUTING.md](./CONTRIBUTING.md).
+
 ```bash
 npm install
 npm run db:local          # apply schema.sql to the local D1
