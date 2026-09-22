@@ -3,7 +3,6 @@ import {
   CalendarPlusIcon,
   CheckIcon,
   CopyIcon,
-  DownloadIcon,
   ExternalLinkIcon,
   RssIcon,
 } from "lucide-react"
@@ -11,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { toast } from "@/components/ui/toast"
-import { downloadUrl, feedUrl, googleUrl, subscribeUrl } from "@/lib/calendar"
+import { feedUrl, googleUrl, subscribeUrl } from "@/lib/calendar"
 import { formatDayLong, formatTimeRange } from "@/lib/dates"
 import type { EventPublic, Slot } from "@shared/types"
 
@@ -68,8 +67,8 @@ export function AddToCalendar({ event, slot, going, token, className }: AddToCal
       </CardHeader>
 
       <CardContent className="flex flex-col gap-3">
-        {slot && (
-          <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {slot && (
             <Button
               variant="outline"
               size="sm"
@@ -78,24 +77,14 @@ export function AddToCalendar({ event, slot, going, token, className }: AddToCal
                   href={googleUrl(event, slot, going)}
                   target="_blank"
                   rel="noopener noreferrer"
+                  aria-label="Add to Google Calendar"
                 />
               }
             >
               <ExternalLinkIcon />
-              Google Calendar
+              Google
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              render={<a href={downloadUrl(event.slug, token)} download />}
-            >
-              <DownloadIcon />
-              Download .ics
-            </Button>
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center gap-2">
+          )}
           <Button
             variant={slot ? "ghost" : "outline"}
             size="sm"

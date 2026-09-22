@@ -6,8 +6,8 @@ import type { EventPublic, Slot } from "@shared/types"
  * and rides on the same token the page used, so gated events stay gated.
  */
 
-function feedPath(slug: string, token: string | null, extra: Record<string, string> = {}) {
-  const params = new URLSearchParams({ slug, ...extra })
+function feedPath(slug: string, token: string | null) {
+  const params = new URLSearchParams({ slug })
   if (token) params.set("t", token)
   return `/api/event/calendar.ics?${params.toString()}`
 }
@@ -20,11 +20,6 @@ export function feedUrl(slug: string, token: string | null): string {
 /** The same feed as a webcal: link, which Apple Calendar and Outlook open as a subscription. */
 export function subscribeUrl(slug: string, token: string | null): string {
   return feedUrl(slug, token).replace(/^https?:/, "webcal:")
-}
-
-/** One-off .ics download of the locked date. */
-export function downloadUrl(slug: string, token: string | null): string {
-  return feedPath(slug, token, { download: "1" })
 }
 
 /** A pre-filled Google Calendar "new event" page for the locked slot. */

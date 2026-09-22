@@ -80,9 +80,8 @@ Groups are optional: an event can stand alone with its own key.
   subscription for the event. It is empty until the organiser locks a date in, at
   which point the entry appears in your calendar by itself, with the time in the
   event's timezone, who's going in the notes and a link back. Unlocking removes it
-  again, and re-locking a different day moves it. Once a date is locked there are
-  also one-off *Google Calendar* and *Download .ics* buttons for everyone, voter or
-  not. A slot with a start but no end is shown as two hours; an end earlier than
+  again, and re-locking a different day moves it. Once a date is locked there is
+  also a one-off *Google Calendar* button for everyone, voter or not. A slot with a start but no end is shown as two hours; an end earlier than
   the start rolls over to the next morning. Gated events need the same token on the
   feed URL as on the page.
 
