@@ -77,9 +77,7 @@ function TopBar() {
     <header className="border-b">
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4">
         <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
-          <span className="bg-primary text-primary-foreground flex size-6 items-center justify-center rounded-md text-xs font-bold">
-            w
-          </span>
+          <img src="/favicon.svg" alt="" className="size-6" />
           when
         </Link>
         <nav className="flex items-center gap-4 text-sm">
