@@ -53,11 +53,13 @@ export function Home() {
           Put your group's night out on its own link, like{" "}
           <Link
             to={`/${DEMO_SLUG}`}
-            className="bg-muted hover:bg-accent rounded px-1.5 py-0.5 font-mono text-[0.9em] underline-offset-4 transition-colors hover:underline"
+            className="bg-muted hover:bg-accent rounded px-1.5 py-0.5 font-mono text-[0.9em] whitespace-nowrap underline-offset-4 transition-colors hover:underline"
           >
             when.cubityfir.st/{DEMO_SLUG}
           </Link>
-          {". Offer only the days that suit, and let everyone vote."}
+          .
+          <br />
+          Offer only the days that suit, and let everyone vote.
         </p>
 
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
