@@ -400,11 +400,11 @@ export function CalendarLegend({
           </span>
         ))}
       </div>
-      <p className="text-muted-foreground text-xs">
-        {mode === "vote"
-          ? `Click a day to cycle in → maybe${allowNo ? " → can't" : ""} → clear. Shift-click to apply it across a range.`
-          : "Click a day to offer it. Shift-click to offer a whole range."}
-      </p>
+      {mode !== "vote" && (
+        <p className="text-muted-foreground text-xs">
+          Click a day to offer it. Shift-click to offer a whole range.
+        </p>
+      )}
     </div>
   )
 }
