@@ -20,6 +20,7 @@ import { MonthCalendar, CalendarLegend, type DayStatus } from "@/components/mont
 import { VotePanel } from "@/components/vote-panel"
 import { ResultsList } from "@/components/results-list"
 import { OwnerPanel } from "@/components/owner-panel"
+import { AddToCalendar } from "@/components/add-to-calendar"
 import { toast } from "@/components/ui/toast"
 import * as api from "@/lib/api"
 import { ApiError } from "@/lib/api"
@@ -323,7 +324,10 @@ export function EventPage({ slug }: { slug: string }) {
                   onSaved={async (newEditKey) => {
                     api.keys.setEdit(slug, newEditKey)
                     await load()
-                    toast.success("Your availability is saved.")
+                    toast.success(
+                      "Your availability is saved.",
+                      "Want the date in your calendar once it's decided? See \"Add to your calendar\".",
+                    )
                   }}
                 />
               )}
@@ -421,6 +425,18 @@ export function EventPage({ slug }: { slug: string }) {
                   </CardContent>
                 )}
               </Card>
+
+              {/* Offered once you've replied, and to everyone once a date is
+                  locked, so latecomers can still grab it. */}
+              {(view.you || lockedSlot) && (
+                <AddToCalendar
+                  className="order-5 lg:order-none"
+                  event={event}
+                  slot={lockedSlot}
+                  going={lockedSlot ? (tallyBySlot.get(lockedSlot.id)?.yesNames ?? []) : []}
+                  token={token}
+                />
+              )}
             </div>
           </div>
         )

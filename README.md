@@ -76,6 +76,15 @@ Groups are optional: an event can stand alone with its own key.
     as a waiting list, in the order they said yes. Raising the cap promotes them.
 - **Owner-triggered lock-in** — once a date has enough people the organiser can lock
   it, which closes voting and pins the result to the top of the page.
+- **Add to your calendar** — once you've replied, the event page offers a calendar
+  subscription for the event. It is empty until the organiser locks a date in, at
+  which point the entry appears in your calendar by itself, with the time in the
+  event's timezone, who's going in the notes and a link back. Unlocking removes it
+  again, and re-locking a different day moves it. Once a date is locked there are
+  also one-off *Google Calendar* and *Download .ics* buttons for everyone, voter or
+  not. A slot with a start but no end is shown as two hours; an end earlier than
+  the start rolls over to the next morning. Gated events need the same token on the
+  feed URL as on the page.
 
 ## Demo data
 
@@ -151,6 +160,7 @@ wildcard — a greedy `:slug{.+}` swallows sub-resource segments like `/tokens/:
 | `DELETE` | `/api/group?slug=` | group |
 | `POST` | `/api/events` | group key, if the prefix is claimed |
 | `GET` | `/api/event?slug=&t=&e=` | token, if the event is gated |
+| `GET` | `/api/event/calendar.ics?slug=&t=&download=` | token, if the event is gated |
 | `POST` | `/api/event/vote?slug=` | token, if gated |
 | `PATCH` | `/api/event?slug=` | owner |
 | `POST` | `/api/event/lock?slug=` | owner |

@@ -19,6 +19,7 @@ import type {
   VoteValue,
 } from "../shared/types"
 import { groupSlugOf, validateGroupSlug, validateSlug } from "../shared/types"
+import { buildCalendar } from "../shared/calendar"
 
 type Bindings = { DB: D1Database; ASSETS: Fetcher }
 
@@ -974,7 +975,12 @@ api.post("/events", async (c) => {
   return c.json(res, 201)
 })
 
-api.get("/event", async (c) => {
+/**
+ * Loads an event and enforces its access mode for a reader: owners always get
+ * in, and gated events need a live token. Shared by the JSON view and the
+ * calendar feed, so the feed can't leak a date the page wouldn't show.
+ */
+async function requireEventReader(c: KeySource & { env: Bindings }) {
   const slug = slugOf(c)
   const row = await getEventBySlug(c.env.DB, slug)
   const { owner, group } = await resolveEventOwner(c.env.DB, row, c)
@@ -999,6 +1005,11 @@ api.get("/event", async (c) => {
     }
   }
 
+  return { row, owner, group, token }
+}
+
+api.get("/event", async (c) => {
+  const { row, owner, group, token } = await requireEventReader(c)
   return c.json(
     await buildEventView(c.env.DB, row, {
       owner,
@@ -1007,6 +1018,44 @@ api.get("/event", async (c) => {
       editKey: c.req.query("e") ?? null,
     }),
   )
+})
+
+/**
+ * An iCalendar feed for one event. Subscribed calendars poll it, so the entry
+ * appears by itself once the organiser locks a date and goes away if they
+ * unlock it. `?download=1` serves the same bytes as a file for one-off imports.
+ */
+api.get("/event/calendar.ics", async (c) => {
+  const { row, owner, group, token } = await requireEventReader(c)
+  const view = await buildEventView(c.env.DB, row, { owner, group, token })
+  const { event } = view
+
+  const slot = event.slots.find((s) => s.id === event.lockedSlotId) ?? null
+  const going = slot ? (view.event.tallies.find((t) => t.slotId === slot.id)?.yesNames ?? []) : []
+
+  const origin = new URL(c.req.url).origin
+  const host = new URL(c.req.url).hostname
+  const body = buildCalendar(
+    {
+      uid: `${row.id}@${host}`,
+      title: row.title,
+      description: row.description,
+      timezone: row.timezone,
+      url: `${origin}/${row.slug}`,
+      sequence: Math.floor(row.updated_at / 1000),
+      going,
+    },
+    slot,
+    { name: `${row.title} · when` },
+  )
+
+  const download = c.req.query("download") === "1"
+  const filename = row.slug.replace(/\//g, "-") + ".ics"
+  return c.body(body, 200, {
+    "content-type": "text/calendar; charset=utf-8",
+    "content-disposition": `${download ? "attachment" : "inline"}; filename="${filename}"`,
+    "cache-control": "private, max-age=300",
+  })
 })
 
 api.post("/event/vote", async (c) => {
