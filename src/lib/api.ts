@@ -213,6 +213,27 @@ export function lockSlot(slug: string, admin: AdminKeys, slotId: string | null) 
   })
 }
 
+export function confirmSession(
+  slug: string,
+  admin: AdminKeys,
+  slotId: string,
+  confirmed: boolean,
+) {
+  return request<EventViewResponse>(withSlug("/api/event/sessions", slug), {
+    method: "POST",
+    ...admin,
+    body: JSON.stringify({ slotId, confirmed }),
+  })
+}
+
+/** Flags every answer as needing a re-check, and unlocks a one-off event. */
+export function requestRecheck(slug: string, admin: AdminKeys) {
+  return request<EventViewResponse>(withSlug("/api/event/recheck", slug), {
+    method: "POST",
+    ...admin,
+  })
+}
+
 export function createTokens(
   slug: string,
   admin: AdminKeys,

@@ -1,13 +1,28 @@
+import * as React from "react"
 import {
+  CalendarCheckIcon,
+  CalendarXIcon,
   CheckIcon,
   HelpCircleIcon,
+  Loader2Icon,
   LockIcon,
+  RefreshCwIcon,
   TrophyIcon,
   UnlockIcon,
   UsersIcon,
   XIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -23,6 +38,10 @@ interface ResultsListProps {
   slotsByDate: Map<string, Slot[]>
   isOwner: boolean
   onLock: (slotId: string | null) => void | Promise<void>
+  /** Repeatable events: confirm or drop one session. */
+  onConfirm: (slotId: string, confirmed: boolean) => void | Promise<void>
+  /** Ask everyone to re-check their answers (unlocking a one-off event). */
+  onRecheck: () => void | Promise<void>
   className?: string
 }
 
@@ -32,9 +51,13 @@ export function ResultsList({
   slotsByDate,
   isOwner,
   onLock,
+  onConfirm,
+  onRecheck,
   className,
 }: ResultsListProps) {
   const dates = [...slotsByDate.keys()].sort()
+  const repeatable = event.mode === "repeatable"
+  const confirmed = new Set(event.confirmedSlotIds)
 
   // Best option first, so the obvious answer is easy to spot.
   const ranked = [...event.slots].sort(
@@ -44,9 +67,11 @@ export function ResultsList({
   const best = ranked[0]
   const bestScore = best ? (tallyBySlot.get(best.id)?.score ?? 0) : 0
 
-  // What the page should say is happening: the locked date if there is one,
-  // otherwise whichever option is currently ahead.
-  const lockedSlot = event.slots.find((s) => s.id === event.lockedSlotId) ?? null
+  // What the page should say is happening: the locked date (or the next
+  // confirmed session) if there is one, otherwise whichever option is ahead.
+  const lockedSlot = repeatable
+    ? (event.slots.find((s) => confirmed.has(s.id)) ?? null)
+    : (event.slots.find((s) => s.id === event.lockedSlotId) ?? null)
   const headSlot = lockedSlot ?? (bestScore > 0 ? best : null)
   const headTally = headSlot ? tallyBySlot.get(headSlot.id) : undefined
   const headline =
@@ -101,7 +126,7 @@ export function ResultsList({
           >
             <div>
               <p className="text-muted-foreground text-xs">
-                {headline.locked ? "Locked in" : "Leading so far"}
+                {headline.locked ? (repeatable ? "Next session" : "Locked in") : "Leading so far"}
               </p>
               <p className="font-medium">
                 {formatDayLong(headline.slot.date)}
@@ -142,9 +167,9 @@ export function ResultsList({
                       ? (t.score / event.participants.length) * 100
                       : 0
                     : Math.min(100, (t.score / quorum) * 100)
-                const locked = event.lockedSlotId === slot.id
+                const locked = repeatable ? confirmed.has(slot.id) : event.lockedSlotId === slot.id
                 const isBest =
-                  !!best && slot.id === best.id && bestScore > 0 && !event.lockedSlotId
+                  !!best && slot.id === best.id && bestScore > 0 && !event.lockedSlotId && !locked
 
                 return (
                   <div
@@ -165,8 +190,12 @@ export function ResultsList({
                         </span>
                         {locked && (
                           <Badge variant="success" className="gap-1">
-                            <LockIcon className="size-3" />
-                            Locked in
+                            {repeatable ? (
+                              <CalendarCheckIcon className="size-3" />
+                            ) : (
+                              <LockIcon className="size-3" />
+                            )}
+                            {repeatable ? "Confirmed" : "Locked in"}
                           </Badge>
                         )}
                         {!locked && t.meetsQuorum && (
@@ -254,9 +283,25 @@ export function ResultsList({
                               !locked &&
                               (quorum === null ? t.yes === 0 : !t.meetsQuorum)
                             }
-                            onClick={() => onLock(locked ? null : slot.id)}
+                            onClick={() =>
+                              repeatable
+                                ? onConfirm(slot.id, !locked)
+                                : onLock(locked ? null : slot.id)
+                            }
                           >
-                            {locked ? (
+                            {repeatable ? (
+                              locked ? (
+                                <>
+                                  <CalendarXIcon />
+                                  Unconfirm
+                                </>
+                              ) : (
+                                <>
+                                  <CalendarCheckIcon />
+                                  Confirm
+                                </>
+                              )
+                            ) : locked ? (
                               <>
                                 <UnlockIcon />
                                 Reopen
@@ -302,14 +347,73 @@ export function ResultsList({
           })}
         </ClampedList>
 
-        {isOwner && !event.lockedSlotId && (
-          <p className="text-muted-foreground border-t pt-3 text-xs">
-            {event.minAttendees === null
-              ? "Lock in whichever date you want. That closes voting and shows the result at the top of the page."
-              : "Lock in a date once it has enough people. That closes voting and shows the result at the top of the page."}
-          </p>
+        {isOwner && (
+          <div className="flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-muted-foreground text-xs">
+              {repeatable
+                ? "Confirm any date you're running. Voting stays open, so people can keep adding their availability."
+                : event.lockedSlotId
+                  ? "Plans changed? Ask everyone to re-check their answers here rather than starting a new page."
+                  : event.minAttendees === null
+                    ? "Lock in whichever date you want. That closes voting and shows the result at the top of the page."
+                    : "Lock in a date once it has enough people. That closes voting and shows the result at the top of the page."}
+            </p>
+            <RecheckButton event={event} onRecheck={onRecheck} />
+          </div>
         )}
       </CardContent>
     </Card>
+  )
+}
+
+function RecheckButton({
+  event,
+  onRecheck,
+}: {
+  event: EventPublic
+  onRecheck: () => void | Promise<void>
+}) {
+  const [open, setOpen] = React.useState(false)
+  const [busy, setBusy] = React.useState(false)
+  const pending = event.participants.filter((p) => p.needsRecheck).length
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button size="sm" variant="outline" className="shrink-0" />}>
+        <RefreshCwIcon />
+        Ask everyone to re-check
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Ask everyone to re-check?</DialogTitle>
+          <DialogDescription>
+            Everyone's answers stay as they are and keep counting. Each person sees a
+            note asking them to check their answers, and shows as "not re-checked" until
+            they save again.
+            {event.lockedSlotId && " The locked date is released so people can vote again."}
+            {pending > 0 &&
+              ` ${pending} ${pending === 1 ? "person hasn't" : "people haven't"} re-checked since last time.`}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+          <Button
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true)
+              try {
+                await onRecheck()
+                setOpen(false)
+              } finally {
+                setBusy(false)
+              }
+            }}
+          >
+            {busy ? <Loader2Icon className="animate-spin" /> : <RefreshCwIcon />}
+            Ask to re-check
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

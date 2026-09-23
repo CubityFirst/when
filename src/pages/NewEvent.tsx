@@ -7,6 +7,7 @@ import {
   KeyRoundIcon,
   Loader2Icon,
   PlusIcon,
+  RepeatIcon,
   TrashIcon,
   UsersIcon,
   XIcon,
@@ -20,13 +21,14 @@ import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { MonthCalendar, CalendarLegend } from "@/components/month-calendar"
+import { ModePicker } from "@/components/mode-picker"
 import { ClampedList } from "@/components/ui/clamped-list"
 import { toast } from "@/components/ui/toast"
 import * as api from "@/lib/api"
 import { Link, navigate, useSearchParams } from "@/lib/router"
 import { cn } from "@/lib/utils"
 import { defaultMonth, formatDayLong, guessTimezone } from "@/lib/dates"
-import type { AccessMode, CreateEventResponse, SlotInput } from "@shared/types"
+import type { AccessMode, CreateEventResponse, EventMode, SlotInput } from "@shared/types"
 import { validateSlug } from "@shared/types"
 
 interface TimeSlot {
@@ -75,6 +77,7 @@ export function NewEvent() {
   const [capacity, setCapacity] = React.useState(false)
   const [maxAttendees, setMaxAttendees] = React.useState(9)
   const [allowNo, setAllowNo] = React.useState(true)
+  const [mode, setMode] = React.useState<EventMode>("oneoff")
   const [chatUrl, setChatUrl] = React.useState("")
 
   const [slugState, setSlugState] = React.useState<{
@@ -243,6 +246,7 @@ export function NewEvent() {
           chatUrl: chatUrl.trim(),
           countMaybe,
           timezone: guessTimezone(),
+          mode,
           slots,
           tokenLabels: accessMode === "token" ? tokenLabels : undefined,
         },
@@ -603,6 +607,19 @@ export function NewEvent() {
 
         {/* --------------------------------------------------------- sidebar */}
         <div className="flex flex-col gap-6 lg:sticky lg:top-6 lg:self-start">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <RepeatIcon className="size-4" />
+                One-off or repeatable?
+              </CardTitle>
+              <CardDescription>You can change this later.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ModePicker value={mode} onChange={setMode} />
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

@@ -74,13 +74,25 @@ Groups are optional: an event can stand alone with its own key.
   - *Maximum* — how many can actually play. Counted from **"in" votes only**, never
     maybes. A slot shows spots remaining, then "Full"; anyone past the cap is listed
     as a waiting list, in the order they said yes. Raising the cap promotes them.
-- **Owner-triggered lock-in** — once a date has enough people the organiser can lock
-  it, which closes voting and pins the result to the top of the page.
+- **One-off or repeatable** — chosen when the event is made and changeable later.
+  - *One-off*: once a date has enough people the organiser can lock it, which closes
+    voting and pins the result to the top of the page.
+  - *Repeatable*: voting never closes. The organiser confirms any number of sessions,
+    the next one is pinned to the top, and past days drop off the calendar (their
+    votes are kept). Switching a locked one-off event to repeatable turns the locked
+    date into the first session.
+- **Ask everyone to re-check** — when plans change, the organiser can ask for fresh
+  answers on the same page. Everyone's answers stay and keep counting, but each
+  person sees a prompt and shows as "not re-checked" until they save again. On a
+  one-off event this also releases the locked date.
+- **Removing a date keeps its votes** — the day is hidden, not deleted, and adding it
+  back brings its votes with it.
 - **Add to your calendar** — once you've replied, the event page offers a calendar
   subscription for the event. It is empty until the organiser locks a date in, at
   which point the entry appears in your calendar by itself, with the time in the
   event's timezone, who's going in the notes and a link back. Unlocking removes it
-  again, and re-locking a different day moves it. Once a date is locked there is
+  again, and re-locking a different day moves it. A repeatable event's feed carries
+  one entry per confirmed session, including ones that have already happened. Once a date is locked there is
   also a one-off *Google Calendar* button for everyone, voter or not. A slot with a start but no end is shown as two hours; an end earlier than
   the start rolls over to the next morning. Gated events need the same token on the
   feed URL as on the page.
@@ -162,7 +174,9 @@ wildcard — a greedy `:slug{.+}` swallows sub-resource segments like `/tokens/:
 | `GET` | `/api/event/calendar.ics?slug=&t=&download=` | token, if the event is gated |
 | `POST` | `/api/event/vote?slug=` | token, if gated |
 | `PATCH` | `/api/event?slug=` | owner |
-| `POST` | `/api/event/lock?slug=` | owner |
+| `POST` | `/api/event/lock?slug=` | owner (one-off events) |
+| `POST` | `/api/event/sessions?slug=` | owner (repeatable events) |
+| `POST` | `/api/event/recheck?slug=` | owner |
 | `POST` | `/api/event/tokens?slug=` | owner |
 | `DELETE` | `/api/event/tokens/:tokenId?slug=` | owner |
 | `DELETE` | `/api/event/participants/:id?slug=` | owner |

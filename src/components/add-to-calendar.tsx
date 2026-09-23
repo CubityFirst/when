@@ -16,9 +16,12 @@ import type { EventPublic, Slot } from "@shared/types"
 
 interface AddToCalendarProps {
   event: EventPublic
-  /** The locked-in slot, or null while the date is still being decided. */
+  /**
+   * The locked-in slot (or a repeatable event's next session), or null while
+   * nothing is decided.
+   */
   slot: Slot | null
-  /** Who said yes to the locked slot; goes into the calendar entry's notes. */
+  /** Who said yes to that slot; goes into the calendar entry's notes. */
   going: string[]
   token: string | null
   className?: string
@@ -31,6 +34,7 @@ interface AddToCalendarProps {
  */
 export function AddToCalendar({ event, slot, going, token, className }: AddToCalendarProps) {
   const [copied, setCopied] = React.useState(false)
+  const repeatable = event.mode === "repeatable"
   const feed = feedUrl(event.slug, token)
 
   async function copyFeed() {
@@ -53,13 +57,18 @@ export function AddToCalendar({ event, slot, going, token, className }: AddToCal
         <CardDescription>
           {slot ? (
             <>
+              {repeatable && "Next session: "}
               <span className="text-foreground font-medium">
                 {formatDayLong(slot.date)}
               </span>
               {" · "}
-              {formatTimeRange(slot.startTime, slot.endTime)}. Add it once, or subscribe
-              so it follows any change.
+              {formatTimeRange(slot.startTime, slot.endTime)}.{" "}
+              {repeatable
+                ? "Add this one, or subscribe to get every session as it's confirmed."
+                : "Add it once, or subscribe so it follows any change."}
             </>
+          ) : repeatable ? (
+            "No sessions are confirmed yet. Subscribe now and each one appears in your calendar as the organiser confirms it."
           ) : (
             "No date is fixed yet. Subscribe now and it appears in your calendar the moment the organiser locks one in."
           )}

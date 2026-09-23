@@ -1,5 +1,7 @@
 export type VoteValue = "yes" | "maybe" | "no"
 export type AccessMode = "open" | "token" | "group"
+/** One-off events lock a single date and close; repeatable ones stay open. */
+export type EventMode = "oneoff" | "repeatable"
 
 export interface GroupMember {
   id: string
@@ -29,6 +31,8 @@ export interface GroupEventSummary {
   rosterSize: number
   bestScore: number
   bestDate: string | null
+  mode: EventMode
+  /** One-off: the locked date. Repeatable: the next confirmed session. */
   lockedDate: string | null
   closed: boolean
   createdAt: number
@@ -119,6 +123,8 @@ export interface PublicParticipant {
   name: string
   comment: string
   votes: Record<string, VoteValue>
+  /** The organiser asked everyone to re-check, and this person hasn't saved since. */
+  needsRecheck: boolean
   updatedAt: number
 }
 
@@ -153,7 +159,11 @@ export interface EventPublic {
   chatUrl: string
   countMaybe: boolean
   timezone: string
+  mode: EventMode
+  /** One-off only; repeatable events confirm sessions instead. */
   lockedSlotId: string | null
+  /** Repeatable only: confirmed sessions still on the calendar, earliest first. */
+  confirmedSlotIds: string[]
   closed: boolean
   createdAt: number
   slots: Slot[]
@@ -194,6 +204,8 @@ export interface CreateEventBody {
   chatUrl?: string
   countMaybe?: boolean
   timezone?: string
+  /** Defaults to "oneoff". */
+  mode?: EventMode
   slots: SlotInput[]
   tokenLabels?: string[]
 }

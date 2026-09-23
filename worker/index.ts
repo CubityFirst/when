@@ -6,6 +6,7 @@ import type {
   CreateGroupBody,
   CreateGroupResponse,
   EventPublic,
+  EventMode,
   EventToken,
   EventViewResponse,
   GroupEventSummary,
@@ -109,6 +110,28 @@ function cleanUrl(v: unknown): string {
   }
 }
 
+function cleanMode(v: unknown): EventMode | null {
+  return v === "oneoff" || v === "repeatable" ? v : null
+}
+
+/** Today's date, YYYY-MM-DD, on the event's wall clock (UTC for an unknown zone). */
+function todayIn(zone: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: zone }).format(new Date())
+  } catch {
+    return new Date().toISOString().slice(0, 10)
+  }
+}
+
+/**
+ * The earliest date still open for voting. Repeatable events roll forward, so
+ * past days drop off (their votes are kept); one-off events keep every day.
+ * Used as `date >= ?`, where "" lets everything through.
+ */
+function openFrom(row: Pick<EventRow, "mode" | "timezone">): string {
+  return row.mode === "repeatable" ? todayIn(row.timezone) : ""
+}
+
 function splitNames(input: unknown, limit = 200): string[] {
   if (!Array.isArray(input)) return []
   return input.map((n) => str(n, 60)).filter(Boolean).slice(0, limit)
@@ -150,6 +173,8 @@ interface EventRow {
   chat_url: string
   count_maybe: number
   timezone: string
+  mode: EventMode
+  vote_round: number
   locked_slot_id: string | null
   closed: number
   created_at: number
@@ -269,6 +294,7 @@ interface SlotRow {
   end_time: string | null
   label: string | null
   sort_order: number
+  confirmed: number
 }
 interface ParticipantRow {
   id: string
@@ -277,6 +303,7 @@ interface ParticipantRow {
   token_id: string | null
   member_id: string | null
   edit_key: string
+  vote_round: number
   updated_at: number
 }
 interface VoteRow {
@@ -293,27 +320,32 @@ async function buildEventView(
     group: GroupRow | null
     token?: string | null
     editKey?: string | null
+    /** Keep days a repeatable event has rolled past, e.g. for the calendar feed. */
+    includePast?: boolean
   },
 ): Promise<EventViewResponse> {
+  const from = opts.includePast ? "" : openFrom(row)
   const [slotRes, partRes, voteRes] = await db.batch<Record<string, never>>([
     db
       .prepare(
-        "SELECT id, date, start_time, end_time, label, sort_order FROM slots WHERE event_id = ? ORDER BY date, sort_order, start_time",
+        "SELECT id, date, start_time, end_time, label, sort_order, confirmed FROM slots WHERE event_id = ? AND hidden = 0 AND date >= ? ORDER BY date, sort_order, start_time",
+      )
+      .bind(row.id, from),
+    db
+      .prepare(
+        "SELECT id, name, comment, token_id, member_id, edit_key, vote_round, updated_at FROM participants WHERE event_id = ? ORDER BY created_at",
       )
       .bind(row.id),
     db
       .prepare(
-        "SELECT id, name, comment, token_id, member_id, edit_key, updated_at FROM participants WHERE event_id = ? ORDER BY created_at",
+        "SELECT v.participant_id, v.slot_id, v.value FROM votes v JOIN participants p ON p.id = v.participant_id JOIN slots s ON s.id = v.slot_id WHERE p.event_id = ? AND s.hidden = 0 AND s.date >= ?",
       )
-      .bind(row.id),
-    db
-      .prepare(
-        "SELECT v.participant_id, v.slot_id, v.value FROM votes v JOIN participants p ON p.id = v.participant_id WHERE p.event_id = ?",
-      )
-      .bind(row.id),
+      .bind(row.id, from),
   ])
 
-  const slots: Slot[] = ((slotRes.results ?? []) as unknown as SlotRow[]).map((s) => ({
+  const slotRows = (slotRes.results ?? []) as unknown as SlotRow[]
+
+  const slots: Slot[] = slotRows.map((s) => ({
     id: s.id,
     date: s.date,
     startTime: s.start_time,
@@ -338,6 +370,7 @@ async function buildEventView(
     name: p.name,
     comment: p.comment,
     votes: votesByParticipant.get(p.id) ?? {},
+    needsRecheck: p.vote_round < row.vote_round,
     updatedAt: p.updated_at,
   }))
 
@@ -447,8 +480,11 @@ async function buildEventView(
     chatUrl: row.chat_url ?? "",
     countMaybe,
     timezone: row.timezone,
-    lockedSlotId: row.locked_slot_id,
-    closed: row.closed === 1,
+    mode: row.mode,
+    lockedSlotId: row.mode === "oneoff" ? row.locked_slot_id : null,
+    confirmedSlotIds:
+      row.mode === "repeatable" ? slotRows.filter((s) => s.confirmed === 1).map((s) => s.id) : [],
+    closed: row.mode === "oneoff" && row.closed === 1,
     createdAt: row.created_at,
     slots,
     participants,
@@ -513,13 +549,15 @@ async function buildGroupView(
     title: string
     min_attendees: number
     count_maybe: number
+    mode: EventMode
+    timezone: string
     locked_slot_id: string | null
     closed: number
     created_at: number
   }
   const eventRes = await db
     .prepare(
-      "SELECT id, slug, title, min_attendees, count_maybe, locked_slot_id, closed, created_at FROM events WHERE group_id = ? ORDER BY created_at DESC",
+      "SELECT id, slug, title, min_attendees, count_maybe, mode, timezone, locked_slot_id, closed, created_at FROM events WHERE group_id = ? ORDER BY created_at DESC",
     )
     .bind(group.id)
     .all<EvRow>()
@@ -530,18 +568,19 @@ async function buildGroupView(
     event_id: string
     slot_id: string
     date: string
+    confirmed: number
     yes: number
     maybe: number
   }
   const agg = await db
     .prepare(
-      `SELECT s.event_id AS event_id, s.id AS slot_id, s.date AS date,
+      `SELECT s.event_id AS event_id, s.id AS slot_id, s.date AS date, s.confirmed AS confirmed,
               SUM(CASE WHEN v.value = 'yes' THEN 1 ELSE 0 END) AS yes,
               SUM(CASE WHEN v.value = 'maybe' THEN 1 ELSE 0 END) AS maybe
          FROM slots s
          JOIN events e ON e.id = s.event_id
          LEFT JOIN votes v ON v.slot_id = s.id
-        WHERE e.group_id = ?
+        WHERE e.group_id = ? AND s.hidden = 0
         GROUP BY s.id`,
     )
     .bind(group.id)
@@ -561,10 +600,15 @@ async function buildGroupView(
   const dateBySlot = new Map((agg.results ?? []).map((r) => [r.slot_id, r.date]))
 
   const events: GroupEventSummary[] = eventRows.map((ev) => {
+    const from = openFrom(ev)
     let bestScore = 0
     let bestDate: string | null = null
+    let nextSession: string | null = null
     for (const r of agg.results ?? []) {
-      if (r.event_id !== ev.id) continue
+      if (r.event_id !== ev.id || r.date < from) continue
+      if (r.confirmed === 1 && (nextSession === null || r.date < nextSession)) {
+        nextSession = r.date
+      }
       const score = ev.count_maybe === 1 ? r.yes + r.maybe : r.yes
       if (score > bestScore) {
         bestScore = score
@@ -579,8 +623,14 @@ async function buildGroupView(
       rosterSize: live.length,
       bestScore,
       bestDate,
-      lockedDate: ev.locked_slot_id ? (dateBySlot.get(ev.locked_slot_id) ?? null) : null,
-      closed: ev.closed === 1,
+      mode: ev.mode,
+      lockedDate:
+        ev.mode === "repeatable"
+          ? nextSession
+          : ev.locked_slot_id
+            ? (dateBySlot.get(ev.locked_slot_id) ?? null)
+            : null,
+      closed: ev.mode === "oneoff" && ev.closed === 1,
       createdAt: ev.created_at,
     }
   })
@@ -914,7 +964,7 @@ api.post("/events", async (c) => {
 
   statements.push(
     c.env.DB.prepare(
-      "INSERT INTO events (id, slug, group_id, title, description, owner_key_hash, access_mode, min_attendees, max_attendees, allow_no, chat_url, count_maybe, timezone, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO events (id, slug, group_id, title, description, owner_key_hash, access_mode, min_attendees, max_attendees, allow_no, chat_url, count_maybe, timezone, mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     ).bind(
       eventId,
       slug,
@@ -929,6 +979,7 @@ api.post("/events", async (c) => {
       cleanUrl(body.chatUrl),
       body.countMaybe ? 1 : 0,
       str(body.timezone, 64, "Europe/London"),
+      cleanMode(body.mode) ?? "oneoff",
       now,
       now,
     ),
@@ -1023,29 +1074,37 @@ api.get("/event", async (c) => {
 /**
  * An iCalendar feed for one event. Subscribed calendars poll it, so the entry
  * appears by itself once the organiser locks a date and goes away if they
- * unlock it. `?download=1` serves the same bytes as a file for one-off imports.
+ * unlock it. A repeatable event carries one entry per confirmed session, past
+ * ones included so they don't vanish from calendars once they've happened.
+ * `?download=1` serves the same bytes as a file for one-off imports.
  */
 api.get("/event/calendar.ics", async (c) => {
   const { row, owner, group, token } = await requireEventReader(c)
-  const view = await buildEventView(c.env.DB, row, { owner, group, token })
+  const view = await buildEventView(c.env.DB, row, { owner, group, token, includePast: true })
   const { event } = view
 
-  const slot = event.slots.find((s) => s.id === event.lockedSlotId) ?? null
-  const going = slot ? (view.event.tallies.find((t) => t.slotId === slot.id)?.yesNames ?? []) : []
+  const chosen =
+    event.mode === "repeatable"
+      ? event.slots.filter((s) => event.confirmedSlotIds.includes(s.id))
+      : event.slots.filter((s) => s.id === event.lockedSlotId)
 
   const origin = new URL(c.req.url).origin
   const host = new URL(c.req.url).hostname
   const body = buildCalendar(
-    {
-      uid: `${row.id}@${host}`,
-      title: row.title,
-      description: row.description,
-      timezone: row.timezone,
-      url: `${origin}/${row.slug}`,
-      sequence: Math.floor(row.updated_at / 1000),
-      going,
-    },
-    slot,
+    chosen.map((slot) => ({
+      ev: {
+        // A one-off event keeps its long-standing UID, so existing subscribers
+        // see the same entry move rather than a new one appear.
+        uid: event.mode === "repeatable" ? `${slot.id}@${host}` : `${row.id}@${host}`,
+        title: row.title,
+        description: row.description,
+        timezone: row.timezone,
+        url: `${origin}/${row.slug}`,
+        sequence: Math.floor(row.updated_at / 1000),
+        going: event.tallies.find((t) => t.slotId === slot.id)?.yesNames ?? [],
+      },
+      slot,
+    })),
     { name: `${row.title} · when` },
   )
 
@@ -1061,7 +1120,7 @@ api.get("/event/calendar.ics", async (c) => {
 api.post("/event/vote", async (c) => {
   const slug = slugOf(c)
   const row = await getEventBySlug(c.env.DB, slug)
-  if (row.closed === 1 || row.locked_slot_id) {
+  if (row.mode === "oneoff" && (row.closed === 1 || row.locked_slot_id)) {
     throw new HttpError(410, "Voting has closed for this event.")
   }
 
@@ -1116,8 +1175,11 @@ api.post("/event/vote", async (c) => {
       .first<{ id: string; edit_key: string }>()
   }
 
-  const slotRows = await c.env.DB.prepare("SELECT id FROM slots WHERE event_id = ?")
-    .bind(row.id)
+  const from = openFrom(row)
+  const slotRows = await c.env.DB.prepare(
+    "SELECT id FROM slots WHERE event_id = ? AND hidden = 0 AND date >= ?",
+  )
+    .bind(row.id, from)
     .all<{ id: string }>()
   const validSlots = new Set((slotRows.results ?? []).map((s) => s.id))
 
@@ -1136,9 +1198,13 @@ api.post("/event/vote", async (c) => {
   if (existing) {
     statements.push(
       c.env.DB.prepare(
-        "UPDATE participants SET name = ?, comment = ?, updated_at = ? WHERE id = ?",
-      ).bind(name, str(body.comment, 280), now, participantId),
-      c.env.DB.prepare("DELETE FROM votes WHERE participant_id = ?").bind(participantId),
+        "UPDATE participants SET name = ?, comment = ?, vote_round = ?, updated_at = ? WHERE id = ?",
+      ).bind(name, str(body.comment, 280), row.vote_round, now, participantId),
+      // Only the dates on show are being re-answered; votes on removed or past
+      // dates stay put.
+      c.env.DB.prepare(
+        "DELETE FROM votes WHERE participant_id = ? AND slot_id IN (SELECT id FROM slots WHERE event_id = ? AND hidden = 0 AND date >= ?)",
+      ).bind(participantId, row.id, from),
     )
   } else {
     if (!tokenId && !memberId) {
@@ -1158,7 +1224,7 @@ api.post("/event/vote", async (c) => {
     }
     statements.push(
       c.env.DB.prepare(
-        "INSERT INTO participants (id, event_id, name, comment, token_id, member_id, edit_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO participants (id, event_id, name, comment, token_id, member_id, edit_key, vote_round, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       ).bind(
         participantId,
         row.id,
@@ -1167,6 +1233,7 @@ api.post("/event/vote", async (c) => {
         tokenId,
         memberId,
         editKey,
+        row.vote_round,
         now,
         now,
       ),
@@ -1251,10 +1318,29 @@ api.patch("/event", async (c) => {
 
   const statements: D1PreparedStatement[] = []
 
+  // Switching mode carries the decision across: a locked date becomes the first
+  // confirmed session, and going back to one-off drops the sessions (voting is
+  // left open so the organiser can lock one).
+  const mode = cleanMode(body.mode)
+  if (mode && mode !== row.mode) {
+    sets.push("mode = ?", "locked_slot_id = NULL", "closed = 0")
+    args.push(mode)
+    if (mode === "repeatable" && row.locked_slot_id) {
+      statements.push(
+        c.env.DB.prepare("UPDATE slots SET confirmed = 1 WHERE id = ?").bind(row.locked_slot_id),
+      )
+    }
+    if (mode === "oneoff") {
+      statements.push(
+        c.env.DB.prepare("UPDATE slots SET confirmed = 0 WHERE event_id = ?").bind(row.id),
+      )
+    }
+  }
+
   if (sets.length) {
     sets.push("updated_at = ?")
     args.push(Date.now(), row.id)
-    statements.push(
+    statements.unshift(
       c.env.DB.prepare("UPDATE events SET " + sets.join(", ") + " WHERE id = ?").bind(
         ...args,
       ),
@@ -1271,6 +1357,7 @@ api.patch("/event", async (c) => {
   }
 
   // Replacing the day/slot set: keep ids for slots that still exist so votes survive.
+  // Dropped slots are hidden rather than deleted, and re-adding one brings its votes back.
   if (Array.isArray(body.slots)) {
     interface ExistingSlot {
       id: string
@@ -1322,7 +1409,7 @@ api.patch("/event", async (c) => {
       if (id) {
         keep.add(id)
         statements.push(
-          c.env.DB.prepare("UPDATE slots SET label = ?, sort_order = ? WHERE id = ?").bind(
+          c.env.DB.prepare("UPDATE slots SET label = ?, sort_order = ?, hidden = 0 WHERE id = ?").bind(
             s.label,
             i,
             id,
@@ -1339,7 +1426,7 @@ api.patch("/event", async (c) => {
 
     for (const s of existing.results ?? []) {
       if (!keep.has(s.id)) {
-        statements.push(c.env.DB.prepare("DELETE FROM slots WHERE id = ?").bind(s.id))
+        statements.push(c.env.DB.prepare("UPDATE slots SET hidden = 1, confirmed = 0 WHERE id = ?").bind(s.id))
       }
     }
   }
@@ -1352,12 +1439,15 @@ api.patch("/event", async (c) => {
 
 api.post("/event/lock", async (c) => {
   const { row, group } = await requireEventOwner(c)
+  if (row.mode === "repeatable") {
+    throw new HttpError(400, "Repeatable events confirm sessions rather than locking one date.")
+  }
   const body = await c.req.json<{ slotId: string | null }>().catch(() => null)
   const slotId = body?.slotId ?? null
 
   if (slotId) {
     const belongs = await c.env.DB.prepare(
-      "SELECT 1 FROM slots WHERE id = ? AND event_id = ?",
+      "SELECT 1 FROM slots WHERE id = ? AND event_id = ? AND hidden = 0",
     )
       .bind(slotId, row.id)
       .first()
@@ -1368,6 +1458,53 @@ api.post("/event/lock", async (c) => {
     "UPDATE events SET locked_slot_id = ?, closed = ?, updated_at = ? WHERE id = ?",
   )
     .bind(slotId, slotId ? 1 : 0, Date.now(), row.id)
+    .run()
+
+  const fresh = await getEventBySlug(c.env.DB, row.slug)
+  return c.json(await buildEventView(c.env.DB, fresh, { owner: true, group }))
+})
+
+/** Repeatable events: confirm (or un-confirm) one session. Voting stays open. */
+api.post("/event/sessions", async (c) => {
+  const { row, group } = await requireEventOwner(c)
+  if (row.mode !== "repeatable") {
+    throw new HttpError(400, "Only repeatable events have sessions. Lock a date in instead.")
+  }
+  const body = await c.req
+    .json<{ slotId: string; confirmed: boolean }>()
+    .catch(() => null)
+  if (!body || typeof body.slotId !== "string") throw new HttpError(400, "Malformed request.")
+
+  const belongs = await c.env.DB.prepare(
+    "SELECT 1 FROM slots WHERE id = ? AND event_id = ? AND hidden = 0 AND date >= ?",
+  )
+    .bind(body.slotId, row.id, openFrom(row))
+    .first()
+  if (!belongs) throw new HttpError(400, "That date isn't open on this event.")
+
+  await c.env.DB.batch([
+    c.env.DB.prepare("UPDATE slots SET confirmed = ? WHERE id = ?").bind(
+      body.confirmed ? 1 : 0,
+      body.slotId,
+    ),
+    c.env.DB.prepare("UPDATE events SET updated_at = ? WHERE id = ?").bind(Date.now(), row.id),
+  ])
+
+  const fresh = await getEventBySlug(c.env.DB, row.slug)
+  return c.json(await buildEventView(c.env.DB, fresh, { owner: true, group }))
+})
+
+/**
+ * Ask everyone to look at their answers again, on the same page. Answers are
+ * kept and still count; each person shows as not re-confirmed until they save.
+ * A one-off event is unlocked too, since nobody could re-vote otherwise.
+ */
+api.post("/event/recheck", async (c) => {
+  const { row, group } = await requireEventOwner(c)
+  await c.env.DB.prepare(
+    "UPDATE events SET vote_round = vote_round + 1, locked_slot_id = NULL, closed = 0, updated_at = ? WHERE id = ?",
+  )
+    .bind(Date.now(), row.id)
     .run()
 
   const fresh = await getEventBySlug(c.env.DB, row.slug)

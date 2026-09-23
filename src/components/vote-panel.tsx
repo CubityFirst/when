@@ -5,6 +5,7 @@ import {
   EraserIcon,
   HelpCircleIcon,
   Loader2Icon,
+  RefreshCwIcon,
   SaveIcon,
   SlidersHorizontalIcon,
   XIcon,
@@ -127,6 +128,19 @@ export function VotePanel({
       </CardHeader>
 
       <CardContent className="flex flex-col gap-5">
+        {you?.needsRecheck && (
+          <div className="border-warning/50 bg-warning/10 flex gap-3 rounded-lg border p-3 text-sm">
+            <RefreshCwIcon className="text-warning mt-0.5 size-4 shrink-0" />
+            <div>
+              <p className="font-medium">The organiser has asked everyone to re-check</p>
+              <p className="text-muted-foreground mt-0.5 text-xs">
+                Your previous answers are filled in below. Change anything that's moved on,
+                then save to confirm. Until you do, your old answers still count.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* 1 - who you are */}
         <div className="flex flex-col gap-2">
           <Label htmlFor="name">Your name</Label>
@@ -206,7 +220,11 @@ export function VotePanel({
             className="h-11 w-full sm:h-9 sm:w-auto"
           >
             {saving ? <Loader2Icon className="animate-spin" /> : <SaveIcon />}
-            {you ? "Update my answers" : "Save my availability"}
+            {you?.needsRecheck
+              ? "Confirm my answers"
+              : you
+                ? "Update my answers"
+                : "Save my availability"}
           </Button>
         </div>
           </div>

@@ -39,8 +39,8 @@ export interface MonthCalendarProps {
   statusByDate?: Record<string, DayStatus>
   /** Dates that have hit the attendance threshold. */
   quorumDates?: Set<string>
-  /** The date that has been locked in as final. */
-  lockedDate?: string | null
+  /** Dates locked in as final: one for a one-off event, any number of sessions otherwise. */
+  lockedDates?: Set<string>
   /** Dates carrying more than one time slot. */
   multiSlotDates?: Set<string>
   /** Plain click on an interactive day. */
@@ -86,7 +86,7 @@ export function MonthCalendar({
   selectedDates,
   statusByDate,
   quorumDates,
-  lockedDate,
+  lockedDates,
   multiSlotDates,
   onDayClick,
   onRangeClick,
@@ -196,7 +196,7 @@ export function MonthCalendar({
           const selected = selectedDates?.has(iso) ?? false
           const status = statusByDate?.[iso] ?? "none"
           const quorum = quorumDates?.has(iso) ?? false
-          const locked = lockedDate === iso
+          const locked = lockedDates?.has(iso) ?? false
           const interactive = isInteractive(iso) && !!onDayClick
 
           return (

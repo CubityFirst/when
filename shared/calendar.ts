@@ -1,7 +1,8 @@
 /**
- * iCalendar (RFC 5545) output for an event's locked-in date, shared by the
- * worker (which serves the feed) and the app (which builds "add to calendar"
- * links from the same slot). Nothing here touches the network or the DOM.
+ * iCalendar (RFC 5545) output for an event's locked-in date or confirmed
+ * sessions, shared by the worker (which serves the feed) and the app (which
+ * builds "add to calendar" links from the same slot). Nothing here touches the
+ * network or the DOM.
  */
 
 export interface CalendarSlot {
@@ -206,13 +207,13 @@ export function calendarNotes(ev: Pick<CalendarEvent, "description" | "going" | 
 }
 
 /**
- * A complete VCALENDAR. With no slot it is a valid, empty calendar, which is
- * what a subscriber sees until the organiser locks a date in; once locked the
- * single VEVENT appears on their next refresh, and vanishes again if unlocked.
+ * A complete VCALENDAR with one VEVENT per entry. With no entries it is a
+ * valid, empty calendar, which is what a subscriber sees until the organiser
+ * locks a date in (or confirms a session); entries appear on their next
+ * refresh, and vanish again if the date is unlocked.
  */
 export function buildCalendar(
-  ev: CalendarEvent,
-  slot: CalendarSlot | null,
+  entries: { ev: CalendarEvent; slot: CalendarSlot }[],
   opts: { name: string; now?: Date } = { name: "when" },
 ): string {
   const now = opts.now ?? new Date()
@@ -226,7 +227,7 @@ export function buildCalendar(
     "REFRESH-INTERVAL;VALUE=DURATION:PT1H",
     "X-PUBLISHED-TTL:PT1H",
   ]
-  if (slot) {
+  for (const { ev, slot } of entries) {
     lines.push(
       "BEGIN:VEVENT",
       `UID:${ev.uid}`,

@@ -217,6 +217,11 @@ r = await call("GET", "/api/event?slug=" + enc(tokSlug), { ownerKey: tOwnerKey }
 const keepSlot = r.data.event.slots.find((s) => s.date === D2)
 const beforeTally = r.data.event.tallies.find((t) => t.slotId === keepSlot.id)
 ok(beforeTally.yes === 1, "D2 has 1 yes before edit", beforeTally)
+const d1Slot = r.data.event.slots.find((s) => s.date === D1)
+r = await call("POST", `/api/event/vote?slug=${enc(tokSlug)}`, {
+  body: { name: "Alice again", votes: { [d1Slot.id]: "yes", [keepSlot.id]: "yes" }, token: tokA.token },
+})
+ok(r.status === 200, "Alice says yes to D1 too")
 
 r = await call("PATCH", "/api/event?slug=" + enc(tokSlug), {
   ownerKey: tOwnerKey,
@@ -228,6 +233,24 @@ ok(keptAfter.id === keepSlot.id, "kept slot id stable")
 const afterTally = r.data.event.tallies.find((t) => t.slotId === keptAfter.id)
 ok(afterTally.yes === 1, "vote survived the edit", afterTally)
 ok(r.data.event.slots.length === 2, "D1 removed", r.data.event.slots.length)
+ok(!r.data.event.tallies.some((t) => t.slotId === d1Slot.id), "D1 has no tally while removed")
+ok(
+  r.data.event.participants.every((p) => !(d1Slot.id in p.votes)),
+  "D1 votes not surfaced while removed",
+)
+r = await call("POST", `/api/event/vote?slug=${enc(tokSlug)}`, {
+  body: { name: "Alice again", votes: { [keepSlot.id]: "yes" }, token: tokA.token },
+})
+ok(r.status === 200, "re-vote while D1 is removed")
+
+r = await call("PATCH", "/api/event?slug=" + enc(tokSlug), {
+  ownerKey: tOwnerKey,
+  body: { slots: [{ date: D1 }, { date: D2 }, { date: D3 }] },
+})
+const d1Back = r.data.event.slots.find((s) => s.date === D1)
+ok(d1Back.id === d1Slot.id, "re-added D1 keeps its old id")
+const d1BackTally = r.data.event.tallies.find((t) => t.slotId === d1Back.id)
+ok(d1BackTally.yes === 1, "D1 vote restored on re-add", d1BackTally)
 
 console.log("\n=== 12. patch settings + remove participant ===")
 r = await call("PATCH", "/api/event?slug=" + enc(tokSlug), {

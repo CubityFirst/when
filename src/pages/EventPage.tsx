@@ -1,12 +1,14 @@
 import * as React from "react"
 import {
   AlertCircleIcon,
+  CalendarCheckIcon,
   CalendarDaysIcon,
   CheckIcon,
   KeyRoundIcon,
   LockIcon,
   Loader2Icon,
   MessageCircleIcon,
+  RepeatIcon,
   SettingsIcon,
   UsersIcon,
 } from "lucide-react"
@@ -25,7 +27,7 @@ import { toast } from "@/components/ui/toast"
 import * as api from "@/lib/api"
 import { ApiError } from "@/lib/api"
 import { Link, navigate, useSearchParams } from "@/lib/router"
-import { defaultMonth, formatDayLong, formatTimeRange } from "@/lib/dates"
+import { defaultMonth, formatDayLong, formatDayShort, formatTimeRange } from "@/lib/dates"
 import type { EventViewResponse, VoteValue } from "@shared/types"
 import { chatServiceName, groupSlugOf } from "@shared/types"
 
@@ -147,8 +149,13 @@ export function EventPage({ slug }: { slug: string }) {
   )
 
   const lockedSlot = event.slots.find((s) => s.id === event.lockedSlotId) ?? null
-  const votingClosed = event.closed || !!event.lockedSlotId
+  // Repeatable events never close: confirmed sessions sit alongside open voting.
+  const sessions = event.slots.filter((s) => event.confirmedSlotIds.includes(s.id))
+  const nextSession = sessions[0] ?? null
+  const calendarSlot = lockedSlot ?? nextSession
+  const votingClosed = event.mode === "oneoff" && (event.closed || !!event.lockedSlotId)
   const waiting = event.roster.filter((m) => !m.replied)
+  const unchecked = event.participants.filter((p) => p.needsRecheck)
 
   /** in -> maybe -> can't -> clear, skipping "can't" when it isn't offered. */
   const NEXT: Record<DayStatus, VoteValue | null> = {
@@ -207,6 +214,12 @@ export function EventPage({ slug }: { slug: string }) {
                 <Badge variant="muted" className="gap-1">
                   <KeyRoundIcon className="size-3" />
                   Token only
+                </Badge>
+              )}
+              {event.mode === "repeatable" && (
+                <Badge variant="muted" className="gap-1">
+                  <RepeatIcon className="size-3" />
+                  Repeatable
                 </Badge>
               )}
             </div>
@@ -281,6 +294,27 @@ export function EventPage({ slug }: { slug: string }) {
             </div>
           </div>
         )}
+
+        {nextSession && (
+          <div className="border-success/40 bg-success/10 mt-6 flex flex-wrap items-center gap-3 rounded-xl border p-4">
+            <CalendarCheckIcon className="text-success size-5 shrink-0" />
+            <div>
+              <p className="font-medium">
+                Next session: {formatDayLong(nextSession.date)}
+              </p>
+              <p className="text-muted-foreground text-sm">
+                {formatTimeRange(nextSession.startTime, nextSession.endTime)}
+                {" · "}
+                {tallyBySlot.get(nextSession.id)?.yes ?? 0} going
+                {sessions.length > 1 &&
+                  ` · then ${sessions
+                    .slice(1, 4)
+                    .map((s) => formatDayShort(s.date))
+                    .join(", ")}${sessions.length > 4 ? ` +${sessions.length - 4}` : ""}`}
+              </p>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* The calendar is the control, so it lives inside the answer card. */}
@@ -292,7 +326,7 @@ export function EventPage({ slug }: { slug: string }) {
             enabledDates={enabledDates}
             statusByDate={statusByDate}
             quorumDates={quorumDates}
-            lockedDate={lockedSlot?.date ?? null}
+            lockedDates={new Set((lockedSlot ? [lockedSlot] : sessions).map((s) => s.date))}
             multiSlotDates={multiSlotDates}
             onDayClick={votingClosed ? undefined : cycleDay}
             onRangeClick={votingClosed ? undefined : cycleRange}
@@ -326,7 +360,9 @@ export function EventPage({ slug }: { slug: string }) {
                     await load()
                     toast.success(
                       "Your availability is saved.",
-                      "Want the date in your calendar once it's decided? See \"Add to your calendar\".",
+                      event.mode === "repeatable"
+                        ? "Want sessions in your calendar as they're confirmed? See \"Add to your calendar\"."
+                        : "Want the date in your calendar once it's decided? See \"Add to your calendar\".",
                     )
                   }}
                 />
@@ -344,6 +380,31 @@ export function EventPage({ slug }: { slug: string }) {
                     const res = await api.lockSlot(slug, admin, slotId)
                     setView(res)
                     toast.success(slotId ? "Date locked in." : "Voting reopened.")
+                  } catch (err) {
+                    toast.error(
+                      "Couldn't update",
+                      err instanceof Error ? err.message : undefined,
+                    )
+                  }
+                }}
+                onConfirm={async (slotId, confirmed) => {
+                  try {
+                    setView(await api.confirmSession(slug, admin, slotId, confirmed))
+                    toast.success(confirmed ? "Session confirmed." : "Session unconfirmed.")
+                  } catch (err) {
+                    toast.error(
+                      "Couldn't update",
+                      err instanceof Error ? err.message : undefined,
+                    )
+                  }
+                }}
+                onRecheck={async () => {
+                  try {
+                    setView(await api.requestRecheck(slug, admin))
+                    toast.success(
+                      "Everyone's been asked to re-check.",
+                      "Their answers still count until they update them.",
+                    )
                   } catch (err) {
                     toast.error(
                       "Couldn't update",
@@ -398,13 +459,20 @@ export function EventPage({ slug }: { slug: string }) {
                           {event.participants.map((p) => (
                             <Badge
                               key={p.id}
-                              variant="secondary"
+                              variant={p.needsRecheck ? "muted" : "secondary"}
                               className="text-[0.7rem]"
+                              title={p.needsRecheck ? "Hasn't re-checked yet" : undefined}
                             >
                               {p.name}
                             </Badge>
                           ))}
                         </div>
+                        {unchecked.length > 0 && (
+                          <p className="text-muted-foreground text-xs">
+                            {unchecked.length} of {event.participants.length} still to
+                            re-check (greyed out). Their previous answers still count.
+                          </p>
+                        )}
                       </div>
                     )}
 
@@ -427,13 +495,13 @@ export function EventPage({ slug }: { slug: string }) {
               </Card>
 
               {/* Offered once you've replied, and to everyone once a date is
-                  locked, so latecomers can still grab it. */}
-              {(view.you || lockedSlot) && (
+                  locked (or a session confirmed), so latecomers can still grab it. */}
+              {(view.you || calendarSlot) && (
                 <AddToCalendar
                   className="order-5 lg:order-none"
                   event={event}
-                  slot={lockedSlot}
-                  going={lockedSlot ? (tallyBySlot.get(lockedSlot.id)?.yesNames ?? []) : []}
+                  slot={calendarSlot}
+                  going={calendarSlot ? (tallyBySlot.get(calendarSlot.id)?.yesNames ?? []) : []}
                   token={token}
                 />
               )}

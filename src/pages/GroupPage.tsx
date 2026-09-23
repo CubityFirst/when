@@ -1,6 +1,7 @@
 import * as React from "react"
 import {
   AlertCircleIcon,
+  CalendarCheckIcon,
   CalendarPlusIcon,
   CheckIcon,
   CopyIcon,
@@ -8,6 +9,7 @@ import {
   Loader2Icon,
   MessageCircleIcon,
   PlusIcon,
+  RepeatIcon,
   SettingsIcon,
   Trash2Icon,
   UsersIcon,
@@ -174,14 +176,31 @@ export function GroupPage({ slug }: { slug: string }) {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{ev.title}</span>
+                    {ev.mode === "repeatable" && (
+                      <Badge variant="muted" className="gap-1">
+                        <RepeatIcon className="size-3" />
+                        Repeatable
+                      </Badge>
+                    )}
                     {ev.lockedDate && (
                       <Badge variant="success" className="gap-1">
-                        <LockIcon className="size-3" />
-                        {formatDayShort(ev.lockedDate)}
+                        {ev.mode === "repeatable" ? (
+                          <>
+                            <CalendarCheckIcon className="size-3" />
+                            Next {formatDayShort(ev.lockedDate)}
+                          </>
+                        ) : (
+                          <>
+                            <LockIcon className="size-3" />
+                            {formatDayShort(ev.lockedDate)}
+                          </>
+                        )}
                       </Badge>
                     )}
                     {!ev.lockedDate && met && (
-                      <Badge variant="success">Ready to lock</Badge>
+                      <Badge variant="success">
+                        {ev.mode === "repeatable" ? "Ready to confirm" : "Ready to lock"}
+                      </Badge>
                     )}
                   </div>
                   <p className="text-muted-foreground mt-0.5 font-mono text-xs">

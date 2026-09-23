@@ -29,12 +29,13 @@ import {
   DialogClose,
 } from "@/components/ui/dialog"
 import { MonthCalendar, CalendarLegend } from "@/components/month-calendar"
+import { ModePicker } from "@/components/mode-picker"
 import { toast } from "@/components/ui/toast"
 import * as api from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { defaultMonth, formatDayLong, relativeTime } from "@/lib/dates"
 import { navigate } from "@/lib/router"
-import type { AccessMode, EventViewResponse, SlotInput } from "@shared/types"
+import type { AccessMode, EventMode, EventViewResponse, SlotInput } from "@shared/types"
 
 interface OwnerPanelProps {
   slug: string
@@ -123,6 +124,7 @@ function SettingsTab({
   const [allowNo, setAllowNo] = React.useState(event.allowNo)
   const [chatUrl, setChatUrl] = React.useState(event.chatUrl)
   const [countMaybe, setCountMaybe] = React.useState(event.countMaybe)
+  const [mode, setMode] = React.useState<EventMode>(event.mode)
   const [saving, setSaving] = React.useState(false)
 
   const effectiveQuorum = requireQuorum ? minAttendees : null
@@ -134,7 +136,8 @@ function SettingsTab({
     effectiveCap !== event.maxAttendees ||
     allowNo !== event.allowNo ||
     chatUrl !== event.chatUrl ||
-    countMaybe !== event.countMaybe
+    countMaybe !== event.countMaybe ||
+    mode !== event.mode
 
   async function save() {
     setSaving(true)
@@ -148,6 +151,7 @@ function SettingsTab({
           allowNo,
           chatUrl,
           countMaybe,
+          mode,
         }),
       )
       toast.success("Settings saved.")
@@ -197,6 +201,22 @@ function SettingsTab({
             ? " Shown next to the group's own link."
             : " Clear the field to remove it."}
         </p>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label>Event type</Label>
+        <ModePicker value={mode} onChange={setMode} className="lg:grid-cols-2" />
+        {mode !== event.mode && (
+          <p className="text-muted-foreground text-xs">
+            {mode === "repeatable"
+              ? event.lockedSlotId
+                ? "Voting reopens, and the locked date becomes your first confirmed session."
+                : "Voting stays open, and you confirm sessions as you go."
+              : event.confirmedSlotIds.length
+                ? "Your confirmed sessions are cleared. Lock in a single date once you've picked one."
+                : "Lock in a single date once you've picked one. That closes voting."}
+          </p>
+        )}
       </div>
 
       <label className="flex cursor-pointer items-center gap-3 text-sm">
@@ -371,6 +391,7 @@ function DatesTab({ slug, admin, view, setView }: Omit<OwnerPanelProps, "onReloa
     <div className="flex flex-col gap-4 pt-2">
       <p className="text-muted-foreground text-sm">
         Add or remove days people can vote on. Votes for days you keep are preserved.
+        {event.mode === "repeatable" && " Past days drop off by themselves."}
       </p>
 
       <MonthCalendar
@@ -412,7 +433,8 @@ function DatesTab({ slug, admin, view, setView }: Omit<OwnerPanelProps, "onReloa
             Removing {removed.length} {removed.length === 1 ? "day" : "days"}
           </p>
           <p className="text-muted-foreground mt-1 text-xs">
-            Votes cast for {removed.map(formatDayLong).join(", ")} will be deleted.
+            Votes cast for {removed.map(formatDayLong).join(", ")} are kept, and come
+            back if you add {removed.length === 1 ? "it" : "them"} again.
           </p>
         </div>
       )}
@@ -649,6 +671,11 @@ function PeopleTab({ slug, admin, view, setView }: OwnerPanelProps) {
                 <Badge variant="muted" className="text-[0.65rem]">
                   {yes} yes
                 </Badge>
+                {p.needsRecheck && (
+                  <Badge variant="warning" className="text-[0.65rem]">
+                    Not re-checked
+                  </Badge>
+                )}
               </div>
               <p className="text-muted-foreground text-xs">
                 replied {relativeTime(p.updatedAt)}
