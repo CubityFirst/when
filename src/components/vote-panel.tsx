@@ -5,6 +5,7 @@ import {
   EraserIcon,
   HelpCircleIcon,
   Loader2Icon,
+  PaintBucketIcon,
   RefreshCwIcon,
   SaveIcon,
   SlidersHorizontalIcon,
@@ -166,8 +167,12 @@ export function VotePanel({
         <div className="flex flex-col items-center gap-4">
           {calendar}
 
-          <div className="flex w-full flex-wrap items-center justify-center gap-2">
-            <span className="text-muted-foreground w-full text-center text-xs">Quick fill</span>
+          <div
+            role="group"
+            aria-label="Quick fill"
+            className="flex w-full flex-wrap items-center justify-center gap-2"
+          >
+            <PaintBucketIcon aria-hidden className="text-muted-foreground size-4" />
             {choices.map((c) => (
               <Button
                 key={c.value}
