@@ -340,7 +340,7 @@ export function EventPage({ slug }: { slug: string }) {
             <div className="contents lg:flex lg:flex-col lg:gap-6">
               {votingClosed ? (
                 <Card className="order-1 lg:order-none">
-                  <CardContent>{calendar}</CardContent>
+                  <CardContent className="flex justify-center">{calendar}</CardContent>
                 </Card>
               ) : (
                 <VotePanel

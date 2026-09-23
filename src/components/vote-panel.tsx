@@ -161,58 +161,60 @@ export function VotePanel({
           )}
         </div>
 
-        {/* 2 - answer straight on the calendar. On a wide screen the controls
-            sit beside it rather than leaving the row half empty. */}
-        <div className="flex flex-col gap-5 sm:flex-row sm:gap-8">
-          <div className="shrink-0">{calendar}</div>
+        {/* 2 - answer straight on the calendar, with quick fill just under
+            its legend */}
+        <div className="flex flex-col items-center gap-4">
+          {calendar}
 
-          <div className="flex min-w-0 flex-1 flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-muted-foreground text-xs">Quick fill:</span>
-          {choices.map((c) => (
+          <div className="flex w-full flex-wrap items-center justify-center gap-2">
+            <span className="text-muted-foreground w-full text-center text-xs">Quick fill</span>
+            {choices.map((c) => (
+              <Button
+                key={c.value}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 sm:h-8"
+                onClick={() => setAll(c.value)}
+              >
+                <c.icon />
+                All {c.label.toLowerCase()}
+              </Button>
+            ))}
             <Button
-              key={c.value}
               type="button"
-              variant="outline"
+              variant="ghost"
               size="sm"
-              className="h-9 sm:h-8"
-              onClick={() => setAll(c.value)}
+              className="text-muted-foreground h-9 sm:h-8"
+              disabled={answered === 0}
+              onClick={() => setDraft({})}
             >
-              <c.icon />
-              All {c.label.toLowerCase()}
+              <EraserIcon />
+              Reset
             </Button>
-          ))}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground h-9 sm:h-8"
-            disabled={answered === 0}
-            onClick={() => setDraft({})}
-          >
-            <EraserIcon />
-            Reset
-          </Button>
+          </div>
         </div>
 
-        {/* 3. save, without needing the detail list at all */}
-        <div className="mt-auto flex flex-col gap-2 border-t pt-4 sm:items-end sm:border-t-0 sm:pt-0 sm:text-right">
-          <span className="text-muted-foreground text-sm">
-            {answered} of {total} marked
-          </span>
-          <span
-            aria-live="polite"
-            className={cn(
-              "-mt-1 text-xs",
-              needsName ? "text-warning font-medium" : "text-muted-foreground",
-            )}
-          >
-            {needsName
-              ? "Add your name above to save."
-              : answered === total
-                ? "All done, save when you're ready."
-                : "Leave any you don't mind blank."}
-          </span>
+        {/* 3 - save, without needing the detail list at all */}
+        <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-muted-foreground text-sm">
+              {answered} of {total} marked
+            </span>
+            <span
+              aria-live="polite"
+              className={cn(
+                "text-xs",
+                needsName ? "text-warning font-medium" : "text-muted-foreground",
+              )}
+            >
+              {needsName
+                ? "Add your name above to save."
+                : answered === total
+                  ? "All done, save when you're ready."
+                  : "Leave any you don't mind blank."}
+            </span>
+          </div>
           <Button
             onClick={save}
             disabled={!canSave}
@@ -226,8 +228,6 @@ export function VotePanel({
                 ? "Update my answers"
                 : "Save my availability"}
           </Button>
-        </div>
-          </div>
         </div>
 
         {/* 4 - optional: per-slot precision */}
