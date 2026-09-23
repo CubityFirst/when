@@ -37,6 +37,8 @@ CREATE TABLE IF NOT EXISTS events (
   chat_url        TEXT NOT NULL DEFAULT '',       -- this event's own chat link
   count_maybe     INTEGER NOT NULL DEFAULT 0,     -- count 'maybe' toward quorum
   timezone        TEXT NOT NULL DEFAULT 'Europe/London',
+  mode            TEXT NOT NULL DEFAULT 'oneoff',  -- 'oneoff' | 'repeatable'
+  vote_round      INTEGER NOT NULL DEFAULT 0,      -- bumped to ask for a re-check
   locked_slot_id  TEXT,
   closed          INTEGER NOT NULL DEFAULT 0,
   created_at      INTEGER NOT NULL,
@@ -51,7 +53,9 @@ CREATE TABLE IF NOT EXISTS slots (
   start_time  TEXT,                     -- 'HH:MM', NULL = all day
   end_time    TEXT,                     -- 'HH:MM', optional
   label       TEXT,
-  sort_order  INTEGER NOT NULL DEFAULT 0
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  hidden      INTEGER NOT NULL DEFAULT 0, -- removed from the event; votes kept
+  confirmed   INTEGER NOT NULL DEFAULT 0  -- a confirmed session (repeatable events)
 );
 CREATE INDEX IF NOT EXISTS idx_slots_event ON slots(event_id, date, sort_order);
 
@@ -73,6 +77,7 @@ CREATE TABLE IF NOT EXISTS participants (
   token_id    TEXT REFERENCES tokens(id) ON DELETE SET NULL,
   member_id   TEXT REFERENCES members(id) ON DELETE SET NULL,
   edit_key    TEXT NOT NULL,
+  vote_round  INTEGER NOT NULL DEFAULT 0, -- behind events.vote_round = needs re-check
   created_at  INTEGER NOT NULL,
   updated_at  INTEGER NOT NULL
 );
