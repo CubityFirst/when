@@ -36,7 +36,15 @@ export function EventPage({ slug }: { slug: string }) {
 
   // Keys can arrive in the URL or from a previous visit in this browser.
   const ownerKey = params.get("k") ?? api.keys.owner(slug)
-  const editKey = params.get("e") ?? api.keys.edit(slug)
+  // The key from this visit's own save wins, so a second save is recognised
+  // even when localStorage is unavailable.
+  const [savedEditKey, setSavedEditKey] = React.useState<{ slug: string; key: string } | null>(
+    null,
+  )
+  const editKey =
+    params.get("e") ??
+    (savedEditKey?.slug === slug ? savedEditKey.key : null) ??
+    api.keys.edit(slug)
 
   // A group's key and its members' tokens are stored against the group prefix,
   // so they work across every event under it.
@@ -59,10 +67,16 @@ export function EventPage({ slug }: { slug: string }) {
   const [draft, setDraft] = React.useState<Record<string, VoteValue>>({})
   const [name, setName] = React.useState("")
 
+  // Loads can overlap (a save reloads, and a new key reloads again); only the
+  // most recent one may update the page.
+  const loadSeq = React.useRef(0)
+
   const load = React.useCallback(async () => {
+    const seq = ++loadSeq.current
     setLoading(true)
     try {
       const res = await api.getEvent(slug, { ownerKey, groupKey, token, editKey })
+      if (seq !== loadSeq.current) return
       setView(res)
       setError(null)
       if (ownerKey) api.keys.setOwner(slug, ownerKey)
@@ -75,10 +89,11 @@ export function EventPage({ slug }: { slug: string }) {
         setName(res.tokenLabel)
       }
     } catch (err) {
+      if (seq !== loadSeq.current) return
       if (err instanceof ApiError) setError({ status: err.status, message: err.message })
       else setError({ status: 0, message: "Couldn't reach the server." })
     } finally {
-      setLoading(false)
+      if (seq === loadSeq.current) setLoading(false)
     }
   }, [slug, ownerKey, groupKey, gSlug, token, editKey])
 
@@ -357,6 +372,9 @@ export function EventPage({ slug }: { slug: string }) {
                   editKey={view.you ? editKey : null}
                   onSaved={async (newEditKey) => {
                     api.keys.setEdit(slug, newEditKey)
+                    // A new key re-runs the load effect with it; that load
+                    // supersedes this one, which still carries the old key.
+                    setSavedEditKey({ slug, key: newEditKey })
                     await load()
                     toast.success(
                       "Your availability is saved.",
