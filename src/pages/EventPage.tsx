@@ -23,9 +23,11 @@ import { VotePanel } from "@/components/vote-panel"
 import { ResultsList } from "@/components/results-list"
 import { OwnerPanel } from "@/components/owner-panel"
 import { AddToCalendar } from "@/components/add-to-calendar"
+import { DemoBanner } from "@/components/demo-banner"
 import { toast } from "@/components/ui/toast"
 import * as api from "@/lib/api"
 import { ApiError } from "@/lib/api"
+import { DEMO_SLUG } from "@/lib/demo"
 import { Link, navigate, useSearchParams } from "@/lib/router"
 import { defaultMonth, formatDayLong, formatDayShort, formatTimeRange } from "@/lib/dates"
 import type { EventViewResponse, VoteValue } from "@shared/types"
@@ -128,6 +130,7 @@ export function EventPage({ slug }: { slug: string }) {
   }
 
   const { event, isOwner } = view
+  const isDemo = slug === DEMO_SLUG
 
   /* ------------------------------------------------------ derived display */
 
@@ -206,6 +209,8 @@ export function EventPage({ slug }: { slug: string }) {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:py-12">
+      {isDemo && <DemoBanner asOrganiser={isOwner} />}
+
       {/* ------------------------------------------------------------ head */}
       <header className="mb-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -377,8 +382,10 @@ export function EventPage({ slug }: { slug: string }) {
                     setSavedEditKey({ slug, key: newEditKey })
                     await load()
                     toast.success(
-                      "Your availability is saved.",
-                      event.mode === "repeatable"
+                      isDemo ? "Saved, just for this demo." : "Your availability is saved.",
+                      isDemo
+                        ? "Switch to the organiser view to see it from their side."
+                        : event.mode === "repeatable"
                         ? "Want sessions in your calendar as they're confirmed? See \"Add to your calendar\"."
                         : "Want the date in your calendar once it's decided? See \"Add to your calendar\".",
                     )

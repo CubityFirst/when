@@ -6,7 +6,10 @@ import { Card } from "@/components/ui/card"
 import { Link, navigate } from "@/lib/router"
 
 /** A live, fake-data event used as the worked example on this page. */
-export const DEMO_SLUG = "club/games-night"
+import { DEMO_SLUG } from "@/lib/demo"
+
+/** What a group event link looks like; only ever shown as a placeholder. */
+const EXAMPLE_SLUG = "club/games-night"
 
 const FEATURES = [
   {
@@ -103,7 +106,7 @@ export function Home() {
             <Input
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
-              placeholder={DEMO_SLUG}
+              placeholder={EXAMPLE_SLUG}
               aria-label="Event link"
               className="h-8 border-0 bg-transparent px-1 shadow-none focus-visible:border-0 focus-visible:ring-0"
             />

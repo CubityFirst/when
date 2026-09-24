@@ -6,6 +6,7 @@ import { Home } from "@/pages/Home"
 import { NewEvent } from "@/pages/NewEvent"
 import { NewGroup } from "@/pages/NewGroup"
 import { EventPage } from "@/pages/EventPage"
+import { DEMO_SLUG } from "@/lib/demo"
 import { GroupPage } from "@/pages/GroupPage"
 import { Link, usePathname } from "@/lib/router"
 import * as api from "@/lib/api"
@@ -32,6 +33,8 @@ function Route({ slug }: { slug: string }) {
   if (slug === "") return <Home />
   if (slug === "new") return <NewEvent />
   if (slug === "new/group") return <NewGroup />
+  // Answered in the browser; see lib/demo.ts.
+  if (slug === DEMO_SLUG) return <EventPage key={slug} slug={slug} />
 
   // Groups own exactly one segment, so anything deeper is always an event.
   if (slug.includes("/")) return <EventPage key={slug} slug={slug} />

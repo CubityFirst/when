@@ -9,6 +9,7 @@ import type {
   VoteBody,
   VoteResponse,
 } from "@shared/types"
+import { DEMO_SLUG, demoRequest, isDemoRequest } from "@/lib/demo"
 
 export class ApiError extends Error {
   status: number
@@ -28,6 +29,20 @@ async function request<T>(
   if (ownerKey) headers.set("x-owner-key", ownerKey)
   if (groupKey) headers.set("x-group-key", groupKey)
 
+  // The demo event is answered in the browser and never reaches the server.
+  if (isDemoRequest(path)) {
+    const { status, data } = demoRequest(
+      path,
+      rest.method ?? "GET",
+      headers,
+      typeof rest.body === "string" ? rest.body : null,
+    )
+    if (status >= 400) {
+      throw new ApiError(status, (data as { error: string }).error)
+    }
+    return structuredClone(data) as T
+  }
+
   const res = await fetch(path, { ...rest, headers })
   const text = await res.text()
   const data = text ? JSON.parse(text) : null
@@ -46,6 +61,7 @@ const EDIT_PREFIX = "when:edit:"
 const TOKEN_PREFIX = "when:token:"
 
 function read(key: string): string | null {
+  if (key.endsWith(":" + DEMO_SLUG)) return null
   try {
     return localStorage.getItem(key)
   } catch {
@@ -54,6 +70,8 @@ function read(key: string): string | null {
 }
 
 function write(key: string, value: string) {
+  // Nothing about the demo outlives the page, so a refresh starts it fresh.
+  if (key.endsWith(":" + DEMO_SLUG)) return
   try {
     localStorage.setItem(key, value)
   } catch {

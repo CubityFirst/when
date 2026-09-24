@@ -37,6 +37,7 @@ for (const [slug, shouldBeOk] of [
   ["a/b/c/d/e", false],
   ["api/thing", false],
   ["new", false],
+  ["demo", false], // the in-browser demo
   ["UPPER", true], // normalised to lowercase, not rejected
   ["has space", false],
   ["-lead", false],

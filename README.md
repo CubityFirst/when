@@ -99,9 +99,15 @@ Groups are optional: an event can stand alone with its own key.
 
 ## Demo data
 
-`/club` is a live demo group with twelve made-up members and two events — a
-members-only one with a 9-person threshold, and an open one with no minimum. The
-front page links to it.
+`/demo` is the demo the front page links to. It never touches the server:
+`src/lib/demo.ts` answers the API client's requests for it in the browser, so the
+real event page renders a made-up event that visitors can vote on, lock and
+reconfigure (with a switch between the voter's and organiser's views). Nothing is
+saved, and a refresh starts it over. `demo` is a reserved slug.
+
+`/club` is an older live demo group with twelve made-up members and two events — a
+members-only one with a 9-person threshold, and an open one with no minimum. It is
+real data, so votes on it persist until it is reseeded:
 
 ```bash
 OLD_KEYS=<previous group key> node scripts/seed.mjs

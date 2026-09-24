@@ -250,6 +250,7 @@ export const RESERVED_SLUGS = new Set([
   "robots.txt",
   "manifest.json",
   "about",
+  "demo", // the in-browser demo event
   "_",
 ])
 

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { toast } from "@/components/ui/toast"
+import { DEMO_SLUG } from "@/lib/demo"
 import { feedUrl, googleUrl, subscribeUrl } from "@/lib/calendar"
 import { formatDayLong, formatTimeRange } from "@/lib/dates"
 import type { EventPublic, Slot } from "@shared/types"
@@ -35,9 +36,19 @@ interface AddToCalendarProps {
 export function AddToCalendar({ event, slot, going, token, className }: AddToCalendarProps) {
   const [copied, setCopied] = React.useState(false)
   const repeatable = event.mode === "repeatable"
+
+  // The demo has no feed on the server, so its links explain themselves instead.
+  const demo = event.slug === DEMO_SLUG
+  const demoOnly = (e: React.MouseEvent) => {
+    if (!demo) return false
+    e.preventDefault()
+    toast.info("Calendar links are off in the demo", "On a real event they add the date to your calendar.")
+    return true
+  }
   const feed = feedUrl(event.slug, token)
 
-  async function copyFeed() {
+  async function copyFeed(e: React.MouseEvent) {
+    if (demoOnly(e)) return
     try {
       await navigator.clipboard.writeText(feed)
       setCopied(true)
@@ -84,6 +95,7 @@ export function AddToCalendar({ event, slot, going, token, className }: AddToCal
               render={
                 <a
                   href={googleUrl(event, slot, going)}
+                  onClick={demoOnly}
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="Add to Google Calendar"
@@ -97,7 +109,7 @@ export function AddToCalendar({ event, slot, going, token, className }: AddToCal
           <Button
             variant={slot ? "ghost" : "outline"}
             size="sm"
-            render={<a href={subscribeUrl(event.slug, token)} />}
+            render={<a href={subscribeUrl(event.slug, token)} onClick={demoOnly} />}
           >
             <RssIcon />
             Subscribe
