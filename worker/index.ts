@@ -15,12 +15,12 @@ import type {
   PublicParticipant,
   RosterEntry,
   Slot,
-  SlotTally,
   VoteBody,
   VoteValue,
 } from "../shared/types"
 import { groupSlugOf, validateGroupSlug, validateSlug } from "../shared/types"
 import { buildCalendar } from "../shared/calendar"
+import { tallySlots } from "../shared/tally"
 
 type Bindings = { DB: D1Database; ASSETS: Fetcher }
 
@@ -379,47 +379,7 @@ async function buildEventView(
   const allowNo = row.allow_no === 1
   const countMaybe = row.count_maybe === 1
 
-  const tallies: SlotTally[] = slots.map((slot) => {
-    const t: SlotTally = {
-      slotId: slot.id,
-      yes: 0,
-      maybe: 0,
-      no: 0,
-      score: 0,
-      meetsQuorum: false,
-      spotsLeft: null,
-      full: false,
-      yesNames: [],
-      waitlistNames: [],
-      maybeNames: [],
-      noNames: [],
-    }
-    for (const p of participants) {
-      const v = p.votes[slot.id]
-      if (v === "yes") {
-        t.yes++
-        t.yesNames.push(p.name)
-      } else if (v === "maybe") {
-        t.maybe++
-        t.maybeNames.push(p.name)
-      } else if (v === "no") {
-        t.no++
-        t.noNames.push(p.name)
-      }
-    }
-    t.score = countMaybe ? t.yes + t.maybe : t.yes
-    t.meetsQuorum = quorum !== null && t.score >= quorum
-
-    // The cap applies to 'in' votes only. Participants come back in join order,
-    // so the first N to say yes hold the places and the rest wait.
-    if (capacity !== null) {
-      t.spotsLeft = Math.max(0, capacity - t.yes)
-      t.full = t.yes >= capacity
-      t.waitlistNames = t.yesNames.slice(capacity)
-      t.yesNames = t.yesNames.slice(0, capacity)
-    }
-    return t
-  })
+  const tallies = tallySlots(slots, participants, { quorum, capacity, countMaybe })
 
   // Roster: every live group member, and whether they've answered yet.
   let roster: RosterEntry[] = []
