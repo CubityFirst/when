@@ -97,6 +97,20 @@ Groups are optional: an event can stand alone with its own key.
   the start rolls over to the next morning. Gated events need the same token on the
   feed URL as on the page.
 
+### Link previews
+
+Pasting a group or event link into Discord shows a card rather than a bare link:
+the event's title, its locked date or the three leading dates with turnout against
+the minimum, who has replied, and buttons to vote, add the date to a calendar and
+open the discussion link. Group links list the group's events. The card is a
+Discord [component embed](https://www.npmjs.com/package/discord-component-embed),
+and the same pages carry Open Graph tags for Slack, WhatsApp and the rest.
+
+A gated event's card shows what a voter would see, never an organiser: without a
+token in the link it says only that the event is private and which group it
+belongs to, and an owner key in the link is ignored. Discord caches a preview for
+about 30 minutes, so add a query string such as `?v=2` to see a fresh one.
+
 ## Demo data
 
 `/demo` is the demo the front page links to. It never touches the server:
@@ -154,7 +168,9 @@ creation screen makes you confirm you've saved it.
   `asChild`.
 - Tailwind v4 (CSS-first config in `src/index.css`), React 19, Vite 6
 - Cloudflare Worker + Hono for the API, D1 for storage, static assets served by the
-  Worker's assets binding with SPA fallback
+  Worker's assets binding with SPA fallback. Page requests run the Worker first so
+  it can write link previews into `index.html` with `HTMLRewriter`; `/assets/*`
+  and the favicon skip it
 
 The month calendar (`src/components/month-calendar.tsx`) is hand-built on `date-fns`
 — Base UI has no calendar primitive, and voting is tri-state per slot rather than

@@ -21,6 +21,7 @@ import type {
 import { groupSlugOf, validateGroupSlug, validateSlug } from "../shared/types"
 import { buildCalendar } from "../shared/calendar"
 import { tallySlots } from "../shared/tally"
+import { eventPreview, gatedEventPreview, groupPreview, type Preview } from "./embed"
 
 type Bindings = { DB: D1Database; ASSETS: Fetcher }
 
@@ -997,26 +998,30 @@ async function requireEventReader(c: KeySource & { env: Bindings }) {
   const { owner, group } = await resolveEventOwner(c.env.DB, row, c)
   const token = tokenFrom(c)
 
-  if (!owner) {
+  if (!owner && !(await tokenOpens(c.env.DB, row, token))) {
     if (row.access_mode === "group") {
       if (!token) throw new HttpError(401, "This event is for group members.")
-      if (!(await memberFor(c.env.DB, row.group_id, token))) {
-        throw new HttpError(403, "That member token isn't valid.")
-      }
-    } else if (row.access_mode === "token") {
-      if (!token) throw new HttpError(401, "This event needs an access token.")
-      const valid = await c.env.DB.prepare(
-        "SELECT 1 FROM tokens WHERE event_id = ? AND token = ? AND revoked = 0",
-      )
-        .bind(row.id, token)
-        .first()
-      // A group member's token also opens a token-gated event in their group.
-      const member = await memberFor(c.env.DB, row.group_id, token)
-      if (!valid && !member) throw new HttpError(403, "That access token isn't valid.")
+      throw new HttpError(403, "That member token isn't valid.")
     }
+    if (!token) throw new HttpError(401, "This event needs an access token.")
+    throw new HttpError(403, "That access token isn't valid.")
   }
 
   return { row, owner, group, token }
+}
+
+/** Whether a non-owner holding `token` may read the event. Open events need none. */
+async function tokenOpens(db: D1Database, row: EventRow, token: string | null) {
+  if (row.access_mode === "open") return true
+  if (!token) return false
+  if (await memberFor(db, row.group_id, token)) return true
+  // A group member's token also opens a token-gated event in their group.
+  if (row.access_mode !== "token") return false
+  const valid = await db
+    .prepare("SELECT 1 FROM tokens WHERE event_id = ? AND token = ? AND revoked = 0")
+    .bind(row.id, token)
+    .first()
+  return !!valid
 }
 
 api.get("/event", async (c) => {
@@ -1514,6 +1519,105 @@ api.delete("/event", async (c) => {
 })
 
 app.route("/api", api)
+
+/* ------------------------------------------------------------------ pages */
+
+function escapeAttr(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+}
+
+/** Builds the preview for a group or event path, or null for any other page. */
+async function previewFor(env: Bindings, url: URL): Promise<Preview | null> {
+  const slug = decodeURIComponent(url.pathname).replace(/^\/+|\/+$/g, "").toLowerCase()
+  if (!slug || validateSlug(slug)) return null
+  const origin = url.origin
+  const pageUrl = `${origin}/${slug}`
+
+  if (!slug.includes("/")) {
+    const group = await getGroupBySlug(env.DB, slug)
+    if (group) {
+      const view = await buildGroupView(env.DB, group, { owner: false })
+      return groupPreview(view, origin, pageUrl)
+    }
+  }
+
+  const row = await env.DB.prepare("SELECT * FROM events WHERE slug = ?")
+    .bind(slug)
+    .first<EventRow>()
+  if (!row) return null
+  const group = row.group_id
+    ? ((await env.DB.prepare("SELECT * FROM groups WHERE id = ?")
+        .bind(row.group_id)
+        .first<GroupRow>()) ?? null)
+    : null
+
+  // Owner keys in the link are ignored: the card is what a voter would see.
+  // A token pasted into a channel has already been shared with it, so it opens the card.
+  const token = url.searchParams.get("t")
+  if (!(await tokenOpens(env.DB, row, token))) {
+    return gatedEventPreview(group?.name ?? null, pageUrl)
+  }
+  const { event } = await buildEventView(env.DB, row, { owner: false, group })
+  const q = token ? `&t=${encodeURIComponent(token)}` : ""
+  return eventPreview(event, {
+    page: token ? `${pageUrl}?t=${encodeURIComponent(token)}` : pageUrl,
+    calendar: `${origin}/api/event/calendar.ics?slug=${encodeURIComponent(slug)}${q}&download=1`,
+  })
+}
+
+/**
+ * Every page is the SPA's index.html. For group and event links the worker adds
+ * Open Graph tags and a Discord component embed, since crawlers don't run the app.
+ */
+app.get("*", async (c) => {
+  const res = await c.env.ASSETS.fetch(c.req.raw)
+  if (!res.headers.get("content-type")?.includes("text/html")) return res
+
+  const url = new URL(c.req.url)
+  let preview: Preview | null = null
+  try {
+    preview = await previewFor(c.env, url)
+  } catch (err) {
+    // A preview is a nicety; the page itself must still load.
+    console.error("Preview failed:", err)
+  }
+  if (!preview) return res
+
+  const { title, description, card } = preview
+  const meta =
+    `<meta property="og:site_name" content="when" />` +
+    `<meta property="og:title" content="${escapeAttr(title)}" />` +
+    `<meta property="og:description" content="${escapeAttr(description)}" />` +
+    `<meta property="og:url" content="${escapeAttr(url.origin + url.pathname)}" />` +
+    (card ?? "")
+
+  const out = new HTMLRewriter()
+    .on("title", {
+      element(el) {
+        el.setInnerContent(`${title} · when`)
+      },
+    })
+    .on('meta[name="description"]', {
+      element(el) {
+        el.setAttribute("content", description)
+      },
+    })
+    .on("head", {
+      element(el) {
+        el.append(meta, { html: true })
+      },
+    })
+    .transform(res)
+  // The page now varies with the database, so it mustn't be cached as a static asset.
+  const headers = new Headers(out.headers)
+  headers.set("cache-control", "no-cache")
+  headers.delete("etag")
+  return new Response(out.body, { status: out.status, headers })
+})
 
 app.onError((err, c) => {
   if (err instanceof HttpError) {
