@@ -1559,11 +1559,12 @@ async function previewFor(env: Bindings, url: URL): Promise<Preview | null> {
   // A token pasted into a channel has already been shared with it, so it opens the card.
   const token = url.searchParams.get("t")
   if (!(await tokenOpens(env.DB, row, token))) {
-    return gatedEventPreview(group?.name ?? null, pageUrl)
+    return gatedEventPreview(group?.name ?? null, origin, pageUrl)
   }
   const { event } = await buildEventView(env.DB, row, { owner: false, group })
   const q = token ? `&t=${encodeURIComponent(token)}` : ""
   return eventPreview(event, {
+    origin,
     page: token ? `${pageUrl}?t=${encodeURIComponent(token)}` : pageUrl,
     calendar: `${origin}/api/event/calendar.ics?slug=${encodeURIComponent(slug)}${q}&download=1`,
   })
@@ -1588,10 +1589,8 @@ app.get("*", async (c) => {
   if (!preview) return res
 
   const { title, description, card } = preview
-  const meta =
-    `<meta property="og:site_name" content="when" />` +
-    `<meta property="og:title" content="${escapeAttr(title)}" />` +
-    `<meta property="og:description" content="${escapeAttr(description)}" />` +
+  // index.html carries the site-wide Open Graph tags; these are the per-page ones.
+  const tags =
     `<meta property="og:url" content="${escapeAttr(url.origin + url.pathname)}" />` +
     (card ?? "")
 
@@ -1601,14 +1600,19 @@ app.get("*", async (c) => {
         el.setInnerContent(`${title} · when`)
       },
     })
-    .on('meta[name="description"]', {
+    .on('meta[property="og:title"]', {
+      element(el) {
+        el.setAttribute("content", title)
+      },
+    })
+    .on('meta[name="description"], meta[property="og:description"]', {
       element(el) {
         el.setAttribute("content", description)
       },
     })
     .on("head", {
       element(el) {
-        el.append(meta, { html: true })
+        el.append(tags, { html: true })
       },
     })
     .transform(res)

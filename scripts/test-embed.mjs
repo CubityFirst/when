@@ -20,11 +20,14 @@ async function page(path) {
   const html = await res.text()
   const m = html.match(/<script id="discord:component-embed" type="application\/json">([\s\S]*?)<\/script>/)
   const og = html.match(/<meta property="og:title" content="([^"]*)"/)
+  const count = (prop) => html.split(`property="${prop}"`).length - 1
   return {
     status: res.status,
     html,
     card: m ? JSON.parse(m[1]) : null,
     ogTitle: og ? og[1] : null,
+    ogOnce: ["og:title", "og:description", "og:image", "og:site_name"].every((p) => count(p) === 1),
+    ogImage: html.includes('property="og:image" content="https://when.cubityfir.st/brand/og-image.png"'),
     text: m ? m[1] : "",
   }
 }
@@ -34,7 +37,7 @@ const iso = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.
 console.log("\n=== discord link previews ===")
 const g = "embed" + rnd()
 let r = await call("POST", "/api/groups", {
-  body: { slug: g, name: "Board <Games>", description: "Tuesdays & more", chatUrl: "https://discord.gg/abc123", memberNames: ["Ana", "Ben"] },
+  body: { slug: g, name: 'Board "<Games>"', description: "Tuesdays & more", chatUrl: "https://discord.gg/abc123", memberNames: ["Ana", "Ben"] },
 })
 ok(r.status === 201, "group created")
 const groupKey = r.data.groupKey
@@ -67,6 +70,10 @@ ok(p.text.includes("2 in") && p.text.includes("2/2 needed"), "card shows the lea
 ok(p.text.includes("discord.gg/abc123"), "card links the group chat")
 ok(p.ogTitle === "Open night", "og:title set", p.ogTitle)
 ok(/<title>Open night · when<\/title>/.test(p.html), "document title set")
+ok(p.ogOnce, "each Open Graph tag appears once, rewritten rather than duplicated")
+ok(p.ogImage, "site-wide og:image kept on event pages")
+ok(p.text.includes("/brand/logo.png"), "card carries the logo thumbnail")
+ok(p.card?.component?.accent_color === 0x22c55e, "met minimum turns the accent green", p.card?.component?.accent_color)
 
 console.log("\n--- locked event ---")
 await call("POST", "/api/event/lock?slug=" + enc(open), { groupKey, body: { slotId: first.id } })
@@ -88,16 +95,21 @@ ok(!p.html.includes(groupKey), "owner key is never echoed into the page")
 console.log("\n--- group ---")
 p = await page("/" + g)
 ok(p.text.includes("Board") && p.text.includes("2 members"), "group card names the group", p.text)
-ok(p.ogTitle === "Board &lt;Games&gt;", "og:title is escaped", p.ogTitle)
+ok(p.ogTitle !== null && p.ogTitle.includes("&quot;") && p.ogOnce, "og:title quotes are escaped", p.ogTitle)
 ok(p.text.includes("Secret summit"), "group card lists its events, as the group page does")
 
 console.log("\n--- other pages ---")
 for (const path of ["/", "/new", "/demo", "/nothing-here-" + rnd()]) {
   p = await page(path)
   ok(p.status === 200 && !p.card && p.html.includes('<div id="root">'), `${path} serves the plain shell`)
+  ok(p.ogOnce && p.ogImage && p.ogTitle === "when", `${path} keeps the site-wide Open Graph tags`, p.ogTitle)
 }
 const asset = await fetch(BASE + "/favicon.svg")
 ok(asset.status === 200 && asset.headers.get("content-type")?.includes("svg"), "static assets untouched")
+for (const img of ["og-image.png", "logo.png", "logo-wordmark.png"]) {
+  const res = await fetch(BASE + "/brand/" + img)
+  ok(res.status === 200 && res.headers.get("content-type")?.includes("image/png"), `/brand/${img} served as a PNG`)
+}
 
 await call("DELETE", "/api/group?slug=" + enc(g), { groupKey })
 

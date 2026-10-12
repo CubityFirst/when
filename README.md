@@ -104,7 +104,9 @@ the event's title, its locked date or the three leading dates with turnout again
 the minimum, who has replied, and buttons to vote, add the date to a calendar and
 open the discussion link. Group links list the group's events. The card is a
 Discord [component embed](https://www.npmjs.com/package/discord-component-embed),
-and the same pages carry Open Graph tags for Slack, WhatsApp and the rest.
+and the same pages carry Open Graph tags for Slack, WhatsApp and the rest. Every
+page shares the site-wide `og:image` in `public/brand/`; group and event pages
+rewrite the title and description, and their cards carry the logo as a thumbnail.
 
 A gated event's card shows what a voter would see, never an organiser: without a
 token in the link it says only that the event is private and which group it

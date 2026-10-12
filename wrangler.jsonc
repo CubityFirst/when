@@ -18,7 +18,7 @@
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
     // Pages go through the worker so group and event links get link previews.
-    "run_worker_first": ["/*", "!/assets/*", "!/favicon.svg"]
+    "run_worker_first": ["/*", "!/assets/*", "!/brand/*", "!/favicon.svg"]
   },
   "d1_databases": [
     {

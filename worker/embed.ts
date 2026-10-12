@@ -2,7 +2,9 @@ import {
   ActionRow,
   Container,
   LinkButton,
+  Section,
   TextDisplay,
+  Thumbnail,
   h,
   toComponentEmbedScript,
   type EmbedElement,
@@ -18,9 +20,9 @@ import { chatServiceName } from "../shared/types"
  * builds the card from the database and writes it into the HTML it serves.
  */
 
-/** A decided date, or a group's best-supported one. */
+/** A decided date, or one that has met its minimum. */
 const GREEN = 0x22c55e
-const NEUTRAL = 0x71717a
+const VIOLET = 0x8b5cf6
 
 export interface Preview {
   title: string
@@ -57,6 +59,15 @@ function when(slot: Slot): string {
   const t = time(slot)
   const label = slot.label ? ` (${md(clip(slot.label, 40))})` : ""
   return `**${day(slot.date)}**${t ? `, ${t}` : ""}${label}`
+}
+
+/** The title block, with the logo beside it. */
+function header(text: string, origin: string) {
+  return h(
+    Section,
+    { accessory: h(Thumbnail, { url: `${origin}/brand/logo.png`, description: "when" }) },
+    h(TextDisplay, null, text),
+  )
 }
 
 function toScript(root: EmbedElement): string | null {
@@ -135,7 +146,7 @@ function eventFooter(e: EventPublic): string {
 
 export function eventPreview(
   e: EventPublic,
-  urls: { page: string; calendar: string },
+  urls: { origin: string; page: string; calendar: string },
 ): Preview {
   const decided =
     (e.mode === "oneoff" && !!e.lockedSlotId) || e.confirmedSlotIds.length > 0
@@ -145,8 +156,8 @@ export function eventPreview(
   const chat = chatButton(e.chatUrl || e.group?.chatUrl || "", urls.page)
   const card = h(
     Container,
-    { accentColor: decided || e.tallies.some((t) => t.meetsQuorum) ? GREEN : NEUTRAL },
-    h(TextDisplay, null, `# ${md(clip(e.title, 100))}${description ? "\n" + md(description) : ""}`),
+    { accentColor: decided || e.tallies.some((t) => t.meetsQuorum) ? GREEN : VIOLET },
+    header(`# ${md(clip(e.title, 100))}${description ? "\n" + md(description) : ""}`, urls.origin),
     h(TextDisplay, null, status),
     h(TextDisplay, null, eventFooter(e)),
     h(
@@ -171,6 +182,7 @@ export function eventPreview(
 /** For a gated event opened without a token: nothing past what the group page shows. */
 export function gatedEventPreview(
   groupName: string | null,
+  origin: string,
   pageUrl: string,
 ): Preview {
   const where = groupName ? ` in **${md(clip(groupName, 60))}**` : ""
@@ -183,8 +195,8 @@ export function gatedEventPreview(
     card: toScript(
       h(
         Container,
-        { accentColor: NEUTRAL },
-        h(TextDisplay, null, text),
+        { accentColor: VIOLET },
+        header(text, origin),
         h(ActionRow, null, h(LinkButton, { url: pageUrl, label: "Open" })),
       ),
     ),
@@ -213,8 +225,8 @@ export function groupPreview(view: GroupViewResponse, origin: string, pageUrl: s
 
   const card = h(
     Container,
-    { accentColor: NEUTRAL },
-    h(TextDisplay, null, `# ${md(clip(g.name, 80))}${description ? "\n" + md(description) : ""}`),
+    { accentColor: VIOLET },
+    header(`# ${md(clip(g.name, 80))}${description ? "\n" + md(description) : ""}`, origin),
     lines.length
       ? h(TextDisplay, null, lines.join("\n") + (more > 0 ? `\n-# and ${more} more` : ""))
       : null,
