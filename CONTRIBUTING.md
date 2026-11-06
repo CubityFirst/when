@@ -5,18 +5,23 @@
 ```bash
 npm install
 npm run db:local          # apply schema.sql to the local D1
-npx wrangler dev          # worker + assets on :8787
+npx cf dev                # worker + assets on :8787
 npm run dev               # optional: Vite HMR on :5173, proxying /api to :8787
 ```
+
+The worker is configured in `cloudflare.config.ts` (build settings such as the assets
+directory are in `wrangler.config.ts`). `wrangler.jsonc` is kept only for the
+`wrangler d1` commands behind `db:local` and `db:remote`; `cf` ignores it, so a
+binding change has to go in both files for now.
 
 ## Tests
 
 The test scripts drive a running worker over HTTP rather than mocking it, and they
-default to `127.0.0.1:8788` — not the `:8787` that plain `npx wrangler dev` uses. Start
+default to `127.0.0.1:8788` — not the `:8787` that plain `npx cf dev` uses. Start
 the worker on the port they expect, then run them against it:
 
 ```bash
-npx wrangler dev --port 8788
+npx cf dev --port 8788
 node scripts/test-events.mjs     # each file is standalone
 ```
 
