@@ -221,7 +221,7 @@ Setup, how to run the test scripts, and the commit convention are in
 ```bash
 npm install
 npm run db:local          # apply schema.sql to the local D1
-npx wrangler dev          # worker + assets on :8787
+npx cf dev                # worker + assets on :8787
 npm run dev               # optional: Vite HMR on :5173, proxying /api to :8787
 ```
 
@@ -229,11 +229,11 @@ npm run dev               # optional: Vite HMR on :5173, proxying /api to :8787
 
 ```bash
 npm run db:remote         # only when schema.sql changes
-npm run deploy            # builds, then wrangler deploy
+npm run deploy            # builds, then cf deploy
 ```
 
-The custom domain `when.cubityfir.st` is declared in `wrangler.jsonc`, so Cloudflare
-provisions DNS and the certificate on deploy.
+The custom domain `when.cubityfir.st` is declared in `cloudflare.config.ts`, so
+Cloudflare provisions DNS and the certificate on deploy.
 
 ## Migrations
 
@@ -242,6 +242,13 @@ provisions DNS and the certificate on deploy.
 
 ```bash
 npx wrangler d1 execute when-db --remote --file=./migrations/002_groups.sql
+```
+
+Branch pushes get a Workers Builds preview (`cf previews deploy`), which binds a separate
+`when-db-preview` database rather than production data. Apply each migration there too:
+
+```bash
+npx wrangler d1 execute when-db-preview --remote --file=./migrations/002_groups.sql
 ```
 
 ## Schema notes

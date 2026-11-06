@@ -21,9 +21,13 @@ is in `CONTRIBUTING.md`.
 ## Gotchas
 
 - Invoke Wrangler as `npx wrangler`, never a global `wrangler`.
+- The worker config is `cloudflare.config.ts` (run with `npx cf dev` / `npm run deploy`).
+  `wrangler.jsonc` is kept only for the `wrangler d1` scripts and `cf` ignores it, so
+  binding changes go in both.
 - The test scripts in `scripts/` expect a worker on port **8788**, but plain
-  `npx wrangler dev` serves **8787** — start it with `--port 8788` before running them.
+  `npx cf dev` serves **8787** — start it with `--port 8788` before running them.
 - `npm run build` runs `tsc -b` over the app, worker and shared configs; treat it as the
   typecheck.
 - Schema changes need both a `migrations/` file and the matching edit to `schema.sql`,
-  which is the full schema for a fresh database.
+  which is the full schema for a fresh database. Apply each migration to `when-db-preview`
+  too: Workers Builds previews of branches bind that instead of production `when-db`.
