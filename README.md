@@ -244,6 +244,13 @@ Cloudflare provisions DNS and the certificate on deploy.
 npx wrangler d1 execute when-db --remote --file=./migrations/002_groups.sql
 ```
 
+Branch pushes get a Workers Builds preview (`cf previews deploy`), which binds a separate
+`when-db-preview` database rather than production data. Apply each migration there too:
+
+```bash
+npx wrangler d1 execute when-db-preview --remote --file=./migrations/002_groups.sql
+```
+
 ## Schema notes
 
 `min_attendees` and `max_attendees` store `0` for "unset" and the API maps that to

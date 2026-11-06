@@ -29,4 +29,5 @@ is in `CONTRIBUTING.md`.
 - `npm run build` runs `tsc -b` over the app, worker and shared configs; treat it as the
   typecheck.
 - Schema changes need both a `migrations/` file and the matching edit to `schema.sql`,
-  which is the full schema for a fresh database.
+  which is the full schema for a fresh database. Apply each migration to `when-db-preview`
+  too: Workers Builds previews of branches bind that instead of production `when-db`.

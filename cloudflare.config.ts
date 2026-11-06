@@ -1,6 +1,6 @@
 import { bindings, defineConfig } from "cf/config";
 
-export default defineConfig({
+export default defineConfig(({ isPreview }) => ({
 	accountId: "d843ae90cab33e54f4d284bc65d2fd6a",
 	worker: {
 		name: "when",
@@ -15,6 +15,7 @@ export default defineConfig({
 		},
 		assets: {
 			notFoundHandling: "single-page-application",
+			// Pages go through the worker so group and event links get link previews.
 			runWorkerFirst: [
 				"/*",
 				"!/assets/*",
@@ -22,15 +23,24 @@ export default defineConfig({
 				"!/favicon.svg",
 			],
 		},
-		domains: [
+		// Previews get their own URL; only production serves the custom domain.
+		domains: isPreview ? [] : [
 			"when.cubityfir.st",
 		],
 		env: {
-			DB: bindings.d1({
-				name: "when-db",
-				id: "9d2bf78a-701f-408e-a677-2e3e9e2f5d95",
-			}),
+			// Previews (`cf previews deploy`, run by Workers Builds on branch pushes) use a
+			// separate database so they never touch production data. It was loaded from
+			// schema.sql; apply new migrations to it as well as to when-db.
+			DB: isPreview
+				? bindings.d1({
+					name: "when-db-preview",
+					id: "069ed5d5-9f5d-41e6-99ea-b9f82df323ac",
+				})
+				: bindings.d1({
+					name: "when-db",
+					id: "9d2bf78a-701f-408e-a677-2e3e9e2f5d95",
+				}),
 			ASSETS: bindings.assets(),
 		},
 	},
-});
+}));
