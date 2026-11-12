@@ -21,9 +21,9 @@ is in `CONTRIBUTING.md`.
 ## Gotchas
 
 - Invoke Wrangler as `npx wrangler`, never a global `wrangler`.
-- The worker config is `cloudflare.config.ts` (run with `npx cf dev` / `npm run deploy`).
-  `wrangler.jsonc` is kept only for the `wrangler d1` scripts and `cf` ignores it, so
-  binding changes go in both.
+- The worker config is `cloudflare.config.ts` (run with `npx cf dev` / `npm run deploy`);
+  there is no `wrangler.jsonc`. `npm run db:local` writes the local D1 to
+  `.wrangler/state`, where `cf dev` reads it — keep that `--persist-to` if you change it.
 - The test scripts in `scripts/` expect a worker on port **8788**, but plain
   `npx cf dev` serves **8787** — start it with `--port 8788` before running them.
 - `npm run build` runs `tsc -b` over the app, worker and shared configs; treat it as the

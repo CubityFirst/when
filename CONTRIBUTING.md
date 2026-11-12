@@ -10,9 +10,14 @@ npm run dev               # optional: Vite HMR on :5173, proxying /api to :8787
 ```
 
 The worker is configured in `cloudflare.config.ts` (build settings such as the assets
-directory are in `wrangler.config.ts`). `wrangler.jsonc` is kept only for the
-`wrangler d1` commands behind `db:local` and `db:remote`; `cf` ignores it, so a
-binding change has to go in both files for now.
+directory are in `wrangler.config.ts`). There is no `wrangler.jsonc`: the Wrangler
+commands we still use (`wrangler d1 execute --remote`, `wrangler tail`, `wrangler
+secret`) take the database or worker by name and don't need one.
+
+`npm run db:local` loads `schema.sql` into the local D1 with `cf d1 migrations apply
+--local`, writing to `.wrangler/state` where `cf dev` reads it. It records
+`schema.sql` as applied, so running it again is a no-op; to start over, delete
+`.wrangler/state` and run it again.
 
 ## Tests
 

@@ -30,7 +30,8 @@ export default defineConfig(({ isPreview }) => ({
 		env: {
 			// Previews (`cf previews deploy`, run by Workers Builds on branch pushes) use a
 			// separate database so they never touch production data. It was loaded from
-			// schema.sql; apply new migrations to it as well as to when-db.
+			// schema.sql; apply new migrations to it as well as to when-db. The when-db id
+			// is repeated in the `db:local` script in package.json.
 			DB: isPreview
 				? bindings.d1({
 					name: "when-db-preview",
