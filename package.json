@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "npm run build && cf dev",
     "deploy": "npm run build && cf deploy",
-    "db:local": "wrangler d1 execute when-db --local --file=./schema.sql",
+    "db:local": "cf d1 migrations apply 9d2bf78a-701f-408e-a677-2e3e9e2f5d95 --local --persist-to .wrangler/state --dir . --pattern ./schema.sql",
     "db:remote": "wrangler d1 execute when-db --remote --file=./schema.sql"
   },
   "dependencies": {
@@ -30,7 +30,7 @@
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
-    "cf": "^1.0.0-beta.19",
+    "cf": "^1.0.0-beta.28",
     "tailwindcss": "^4.0.9",
     "tw-animate-css": "^1.2.4",
     "typescript": "^5.7.3",
