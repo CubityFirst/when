@@ -11,7 +11,7 @@ export default defineConfig(({ isPreview }) => ({
 		entrypoint: "worker/index.ts",
 		workersDev: false,
 		observability: {
-			enabled: true,
+			enabled: false,
 		},
 		assets: {
 			notFoundHandling: "single-page-application",
